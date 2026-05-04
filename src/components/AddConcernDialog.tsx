@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
+import { DatePicker } from '@/components/ui/date-picker'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
@@ -17,6 +18,7 @@ import { db } from '@/config/firebase'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
 import type { ActionCategory } from '@/data/sampleActions'
 
 const ENVIRONMENTAL_OFFICERS = [
@@ -40,7 +42,7 @@ export function AddConcernDialog() {
   const { user } = useAppStore()
   
   // Form fields
-  const [dateReported, setDateReported] = useState('')
+  const [dateReported, setDateReported] = useState<Date | undefined>(undefined)
   const [municipality, setMunicipality] = useState('')
   const [category, setCategory] = useState<ActionCategory | ''>('')
   const [assignedTo, setAssignedTo] = useState('')
@@ -146,6 +148,11 @@ export function AddConcernDialog() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (!dateReported) {
+      toast.error('Please select date reported')
+      return
+    }
+    
     if (images.length === 0) {
       toast.error('Please upload at least one image')
       return
@@ -178,7 +185,7 @@ export function AddConcernDialog() {
       
       // Save to Firestore
       const concernData = {
-        dateReported,
+        dateReported: format(dateReported, 'yyyy-MM-dd'),
         dateUploaded: serverTimestamp(),
         municipality,
         category,
@@ -203,7 +210,7 @@ export function AddConcernDialog() {
       })
       
       // Reset form
-      setDateReported('')
+      setDateReported(undefined)
       setMunicipality('')
       setCategory('')
       setAssignedTo('')
@@ -247,13 +254,12 @@ export function AddConcernDialog() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="dateReported">Date Reported *</Label>
-                    <Input
-                      id="dateReported"
-                      type="date"
-                      value={dateReported}
-                      onChange={(e) => setDateReported(e.target.value)}
-                      required
+                    <DatePicker
+                      date={dateReported}
+                      onDateChange={setDateReported}
+                      placeholder="Select date reported"
                       disabled={isSubmitting}
+                      maxDate={new Date()}
                     />
                   </div>
 

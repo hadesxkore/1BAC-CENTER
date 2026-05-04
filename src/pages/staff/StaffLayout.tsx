@@ -75,11 +75,19 @@ function StaffSidebar() {
   const { user, logout } = useAppStore()
   const navigate = useNavigate()
   const location = useLocation()
-  const { state } = useSidebar()
+  const { state, isMobile, setOpenMobile } = useSidebar()
 
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  const handleNavigate = (path: string) => {
+    navigate(path)
+    // Auto-collapse sidebar on mobile after navigation
+    if (isMobile) {
+      setOpenMobile(false)
+    }
   }
 
   const getInitials = (name: string) => {
@@ -136,7 +144,7 @@ function StaffSidebar() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
-                            onClick={() => navigate(item.path)}
+                            onClick={() => handleNavigate(item.path)}
                             isActive={isActive}
                             className="w-full"
                             tooltip={item.title}
@@ -171,7 +179,7 @@ function StaffSidebar() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <SidebarMenuButton
-                    onClick={() => navigate('/staff/settings')}
+                    onClick={() => handleNavigate('/staff/settings')}
                     isActive={location.pathname === '/staff/settings'}
                     tooltip="Settings"
                   >
@@ -245,7 +253,7 @@ function StaffSidebar() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/staff/settings')}>
+            <DropdownMenuItem onClick={() => handleNavigate('/staff/settings')}>
               <HugeiconsIcon
                 icon={Settings02Icon}
                 className="w-4 h-4 mr-2"

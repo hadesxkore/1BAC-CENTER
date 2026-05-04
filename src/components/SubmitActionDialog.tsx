@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
+import { DatePicker } from '@/components/ui/date-picker'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
@@ -14,6 +15,7 @@ import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
 import type { ConcernImage } from '@/data/sampleActions'
 
 interface SubmitActionDialogProps {
@@ -28,6 +30,7 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isCompressing, setIsCompressing] = useState(false)
   const [notes, setNotes] = useState('')
+  const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
   const [images, setImages] = useState<ConcernImage[]>([])
   const { user } = useAppStore()
   
@@ -118,6 +121,11 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
       toast.error('Please provide action notes')
       return
     }
+
+    if (!actionDate) {
+      toast.error('Please select action date')
+      return
+    }
     
     setIsSubmitting(true)
     setUploadProgress(0)
@@ -158,7 +166,7 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
       const concernRef = doc(db, 'concerns', concernId)
       await updateDoc(concernRef, {
         actionTaken: actionTakenData,
-        actionDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
+        actionDate: format(actionDate, 'yyyy-MM-dd'), // Use selected date
         status: 'completed',
         updatedAt: serverTimestamp(),
       })
@@ -174,6 +182,7 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
       
       // Reset form
       setNotes('')
+      setActionDate(undefined)
       setImages([])
       setUploadProgress(0)
       setOpen(false)
@@ -207,6 +216,20 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
           <ScrollArea className="h-full">
             <form onSubmit={handleSubmit} className="px-6 py-6">
               <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="actionDate">Action Date *</Label>
+                  <DatePicker
+                    date={actionDate}
+                    onDateChange={setActionDate}
+                    placeholder="Select action date"
+                    disabled={isSubmitting}
+                    maxDate={new Date()}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Select the date when the action was taken
+                  </p>
+                </div>
+
                 <div className="space-y-2" onPaste={handlePaste}>
                   <Label>Action Photos * (Max 5, Ctrl+V to paste)</Label>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">

@@ -14,7 +14,7 @@ import { Autocomplete } from '@/components/ui/autocomplete'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
-import { uploadToCloudinary, compressImage } from '@/config/cloudinary'
+import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
@@ -179,26 +179,28 @@ export function AddConcernDialog() {
     setUploadProgress(0)
     
     try {
-      // Upload images to Cloudinary
-      const uploadedImages: { url: string; publicId: string }[] = []
       const totalImages = images.length
       
-      for (let i = 0; i < images.length; i++) {
-        const image = images[i]
-        if (image.file) {
-          toast.info(`Uploading image ${i + 1} of ${totalImages}...`)
-          const result = await uploadToCloudinary(image.file)
-          if (result.success) {
-            uploadedImages.push({
-              url: result.url!,
-              publicId: result.publicId!,
-            })
-            setUploadProgress(((i + 1) / totalImages) * 100)
-          } else {
-            throw new Error(`Failed to upload image ${i + 1}`)
-          }
-        }
+      // Prepare files for parallel upload
+      const files = images.map(img => img.file!).filter(Boolean)
+      
+      toast.info(`Uploading ${totalImages} images in parallel...`)
+      
+      // Upload images in parallel
+      const results = await uploadMultipleToCloudinary(files, (completed, total) => {
+        setUploadProgress((completed / total) * 100)
+      })
+      
+      // Check if all uploads were successful
+      const failedUploads = results.filter(r => !r.success)
+      if (failedUploads.length > 0) {
+        throw new Error(`Failed to upload ${failedUploads.length} image(s)`)
       }
+      
+      const uploadedImages = results.map(r => ({
+        url: r.url!,
+        publicId: r.publicId!,
+      }))
       
       // Save to Firestore
       const concernData = {
@@ -223,7 +225,7 @@ export function AddConcernDialog() {
       await addDoc(collection(db, 'concerns'), concernData)
       
       toast.success('Concern Reported Successfully!', {
-        description: `Your report has been submitted`,
+        description: `Uploaded ${totalImages} images and saved report`,
       })
       
       // Reset form

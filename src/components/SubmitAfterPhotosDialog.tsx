@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { DatePicker } from '@/components/ui/date-picker'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
-import { uploadToCloudinary, compressImage } from '@/config/cloudinary'
+import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
@@ -132,26 +132,28 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
     setUploadProgress(0)
     
     try {
-      // Upload after photos to Cloudinary
-      const uploadedAfterPhotos: { url: string; publicId: string }[] = []
       const totalImages = afterPhotos.length
       
-      for (let i = 0; i < afterPhotos.length; i++) {
-        const image = afterPhotos[i]
-        if (image.file) {
-          toast.info(`Uploading after photo ${i + 1} of ${totalImages}...`)
-          const result = await uploadToCloudinary(image.file)
-          if (result.success) {
-            uploadedAfterPhotos.push({
-              url: result.url!,
-              publicId: result.publicId!,
-            })
-            setUploadProgress(((i + 1) / totalImages) * 100)
-          } else {
-            throw new Error(`Failed to upload after photo ${i + 1}`)
-          }
-        }
+      // Prepare files for parallel upload
+      const files = afterPhotos.map(photo => photo.file!).filter(Boolean)
+      
+      toast.info(`Uploading ${totalImages} images in parallel...`)
+      
+      // Upload after photos in parallel
+      const results = await uploadMultipleToCloudinary(files, (completed, total) => {
+        setUploadProgress((completed / total) * 100)
+      })
+      
+      // Check if all uploads were successful
+      const failedUploads = results.filter(r => !r.success)
+      if (failedUploads.length > 0) {
+        throw new Error(`Failed to upload ${failedUploads.length} after photo(s)`)
       }
+      
+      const uploadedAfterPhotos = results.map(r => ({
+        url: r.url!,
+        publicId: r.publicId!,
+      }))
       
       // Prepare after photos data with metadata
       const afterPhotosData = {
@@ -171,7 +173,7 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
       })
       
       toast.success('After Photos Submitted Successfully!', {
-        description: 'Report marked as completed',
+        description: `Uploaded ${totalImages} images and marked as completed`,
       })
       
       // Reset form

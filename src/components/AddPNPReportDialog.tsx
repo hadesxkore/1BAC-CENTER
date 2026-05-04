@@ -14,7 +14,7 @@ import { Autocomplete } from '@/components/ui/autocomplete'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
-import { uploadToCloudinary, compressImage } from '@/config/cloudinary'
+import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
@@ -165,46 +165,51 @@ export function AddPNPReportDialog() {
     setUploadProgress(0)
     
     try {
-      // Upload before photos
-      const uploadedBeforePhotos: { url: string; publicId: string }[] = []
-      const totalBeforeImages = beforePhotos.length
-      
-      for (let i = 0; i < beforePhotos.length; i++) {
-        const image = beforePhotos[i]
-        if (image.file) {
-          toast.info(`Uploading before photo ${i + 1} of ${totalBeforeImages}...`)
-          const result = await uploadToCloudinary(image.file)
-          if (result.success) {
-            uploadedBeforePhotos.push({
-              url: result.url!,
-              publicId: result.publicId!,
-            })
-            setUploadProgress(((i + 1) / (totalBeforeImages + afterPhotos.length)) * 100)
-          } else {
-            throw new Error(`Failed to upload before photo ${i + 1}`)
-          }
-        }
+      const totalImages = beforePhotos.length + afterPhotos.length
+      let completedUploads = 0
+
+      // Prepare files for parallel upload
+      const beforeFiles = beforePhotos.map(photo => photo.file!).filter(Boolean)
+      const afterFiles = afterPhotos.map(photo => photo.file!).filter(Boolean)
+
+      toast.info(`Uploading ${totalImages} images in parallel...`)
+
+      // Upload before photos in parallel
+      const beforeResults = await uploadMultipleToCloudinary(beforeFiles, (completed, total) => {
+        completedUploads = completed
+        setUploadProgress((completedUploads / totalImages) * 100)
+      })
+
+      // Check if all before photos uploaded successfully
+      const failedBeforeUploads = beforeResults.filter(r => !r.success)
+      if (failedBeforeUploads.length > 0) {
+        throw new Error(`Failed to upload ${failedBeforeUploads.length} before photo(s)`)
       }
+
+      const uploadedBeforePhotos = beforeResults.map(r => ({
+        url: r.url!,
+        publicId: r.publicId!,
+      }))
+
+      // Upload after photos in parallel (if any)
+      let uploadedAfterPhotos: { url: string; publicId: string }[] = []
       
-      // Upload after photos (if any)
-      const uploadedAfterPhotos: { url: string; publicId: string }[] = []
-      const totalAfterImages = afterPhotos.length
-      
-      for (let i = 0; i < afterPhotos.length; i++) {
-        const image = afterPhotos[i]
-        if (image.file) {
-          toast.info(`Uploading after photo ${i + 1} of ${totalAfterImages}...`)
-          const result = await uploadToCloudinary(image.file)
-          if (result.success) {
-            uploadedAfterPhotos.push({
-              url: result.url!,
-              publicId: result.publicId!,
-            })
-            setUploadProgress(((totalBeforeImages + i + 1) / (totalBeforeImages + totalAfterImages)) * 100)
-          } else {
-            throw new Error(`Failed to upload after photo ${i + 1}`)
-          }
+      if (afterFiles.length > 0) {
+        const afterResults = await uploadMultipleToCloudinary(afterFiles, (completed, total) => {
+          completedUploads = beforeFiles.length + completed
+          setUploadProgress((completedUploads / totalImages) * 100)
+        })
+
+        // Check if all after photos uploaded successfully
+        const failedAfterUploads = afterResults.filter(r => !r.success)
+        if (failedAfterUploads.length > 0) {
+          throw new Error(`Failed to upload ${failedAfterUploads.length} after photo(s)`)
         }
+
+        uploadedAfterPhotos = afterResults.map(r => ({
+          url: r.url!,
+          publicId: r.publicId!,
+        }))
       }
       
       // Save to Firestore
@@ -238,7 +243,7 @@ export function AddPNPReportDialog() {
       await addDoc(collection(db, 'pnp_reports'), reportData)
       
       toast.success('PNP Report Submitted Successfully!', {
-        description: 'Your report has been submitted',
+        description: `Uploaded ${totalImages} images and saved report`,
       })
       
       // Reset form

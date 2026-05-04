@@ -19,10 +19,11 @@ export const compressImage = async (file: File): Promise<File> => {
   // Only compress if file is larger than 1.5MB
   if (fileSizeInMB > 1.5) {
     const options = {
-      maxSizeMB: 1.5,
-      maxWidthOrHeight: 1920,
+      maxSizeMB: 1.2, // Reduced for faster compression
+      maxWidthOrHeight: 1600, // Reduced resolution for faster upload
       useWebWorker: true,
       fileType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
+      initialQuality: 0.8, // Slightly lower quality for faster compression
     }
     
     try {
@@ -71,6 +72,30 @@ export const uploadToCloudinary = async (file: File) => {
       error: error instanceof Error ? error.message : "Upload failed",
     }
   }
+}
+
+// Helper function to upload multiple images in parallel
+export const uploadMultipleToCloudinary = async (
+  files: File[],
+  onProgress?: (completed: number, total: number) => void
+) => {
+  const uploadPromises = files.map(async (file, index) => {
+    try {
+      const result = await uploadToCloudinary(file)
+      if (onProgress) {
+        onProgress(index + 1, files.length)
+      }
+      return result
+    } catch (error) {
+      console.error(`Error uploading file ${index + 1}:`, error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Upload failed",
+      }
+    }
+  })
+
+  return Promise.all(uploadPromises)
 }
 
 // Helper function to get optimized image URL

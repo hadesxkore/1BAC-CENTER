@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
-import { uploadToCloudinary, compressImage } from '@/config/cloudinary'
+import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
@@ -123,27 +123,28 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
     setUploadProgress(0)
     
     try {
-      // Upload images to Cloudinary
-      const uploadedImages: { url: string; publicId: string }[] = []
       const totalImages = images.length
       
-      for (let i = 0; i < images.length; i++) {
-        const image = images[i]
-        const file = (image as ConcernImage & { file?: File }).file
-        if (file) {
-          toast.info(`Uploading image ${i + 1} of ${totalImages}...`)
-          const result = await uploadToCloudinary(file)
-          if (result.success) {
-            uploadedImages.push({
-              url: result.url!,
-              publicId: result.publicId!,
-            })
-            setUploadProgress(((i + 1) / totalImages) * 100)
-          } else {
-            throw new Error(`Failed to upload image ${i + 1}`)
-          }
-        }
+      // Prepare files for parallel upload
+      const files = images.map(img => (img as ConcernImage & { file?: File }).file!).filter(Boolean)
+      
+      toast.info(`Uploading ${totalImages} images in parallel...`)
+      
+      // Upload images in parallel
+      const results = await uploadMultipleToCloudinary(files, (completed, total) => {
+        setUploadProgress((completed / total) * 100)
+      })
+      
+      // Check if all uploads were successful
+      const failedUploads = results.filter(r => !r.success)
+      if (failedUploads.length > 0) {
+        throw new Error(`Failed to upload ${failedUploads.length} image(s)`)
       }
+      
+      const uploadedImages = results.map(r => ({
+        url: r.url!,
+        publicId: r.publicId!,
+      }))
       
       // Prepare action taken data
       const actionTakenData = {
@@ -168,7 +169,7 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
       }
       
       toast.success('Action Submitted Successfully!', {
-        description: `Action recorded for this concern`,
+        description: `Uploaded ${totalImages} images and marked as completed`,
       })
       
       // Reset form

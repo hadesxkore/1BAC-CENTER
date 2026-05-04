@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { DatePicker } from '@/components/ui/date-picker'
+import { Autocomplete } from '@/components/ui/autocomplete'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
@@ -26,6 +27,22 @@ const ENVIRONMENTAL_OFFICERS = [
   'Pedro Garcia - PENRO',
   'Miguel Torres - CENRO',
   'Iza Santos - PGENRO',
+]
+
+const REPORT_TITLE_SUGGESTIONS = [
+  'ALLEGED ILLEGAL LOGGING GMELINA TREE',
+  'ALLEGED ILLEGAL LOGGING LAWAAN TREE',
+  'ALLEGED ILLEGAL QUARRY',
+  'ALLEGED ILLEGAL KAINGIN',
+  'ALLEGED ILLEGAL ULING',
+  'ALLEGED ILLEGAL CUTTING MAHOGANY',
+  'ALLEGED ILLEGAL CUTTING NARRA TREE',
+  'ALLEGED ILLEGAL CUTTING CALIPTOS',
+  'ALLEGED ILLEGAL CUTTING SANTOL TREE',
+  'ALLEGED ILLEGAL CUTTING MANGO TREE',
+  'ALLEGED ILLEGAL CUTTING MANGO & COCO LAMBER',
+  'ALLEGED ILLEGAL CUTTING ACACIA',
+  'ALLEGED ILLEGAL CUTTING TREE',
 ]
 
 interface ConcernImage {
@@ -325,14 +342,18 @@ export function AddConcernDialog() {
 
                 <div className="space-y-2">
                   <Label htmlFor="reportTitle">Report Title *</Label>
-                  <Input
-                    id="reportTitle"
-                    placeholder="Brief title of the concern"
+                  <Autocomplete
                     value={reportTitle}
-                    onChange={(e) => setReportTitle(e.target.value)}
-                    required
+                    onValueChange={setReportTitle}
+                    options={REPORT_TITLE_SUGGESTIONS}
+                    placeholder="Select or type report title..."
+                    searchPlaceholder="Search or type custom title..."
+                    emptyText="No suggestions found. Type your custom title."
                     disabled={isSubmitting}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Select from suggestions or type your own custom title
+                  </p>
                 </div>
 
                 <div className="space-y-2">

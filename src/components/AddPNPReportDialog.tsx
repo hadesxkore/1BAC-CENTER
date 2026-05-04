@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { DatePicker } from '@/components/ui/date-picker'
+import { Autocomplete } from '@/components/ui/autocomplete'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
@@ -19,6 +20,20 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+
+const PNP_REPORT_TITLE_SUGGESTIONS = [
+  'ALLEGED ILLEGAL PATULO',
+  'ALLEGED ILLEGAL GAMBLING',
+  'ALLEGED ILLEGAL GRO BAR',
+  'ALLEGED ILLEGAL TUPADA',
+  'ALLEGED ILLEGAL PUSHER',
+  'ALLEGED ILLEGAL USER',
+  'ALLEGED ILLEGAL SELLING',
+  'ALLEGED ILLEGAL USER & PUSHER',
+  'ALLEGED ILLEGAL USER & PUSHER & SELLING',
+  'ALLEGED ILLEGAL POSSESSION OF AMMUNITION',
+  'ALLEGED ILLEGAL FIREARMS',
+]
 
 interface PhotoImage {
   url: string
@@ -300,14 +315,18 @@ export function AddPNPReportDialog() {
 
                 <div className="space-y-2">
                   <Label htmlFor="reportTitle">Report Title *</Label>
-                  <Input
-                    id="reportTitle"
-                    placeholder="Brief title of the report"
+                  <Autocomplete
                     value={reportTitle}
-                    onChange={(e) => setReportTitle(e.target.value)}
-                    required
+                    onValueChange={setReportTitle}
+                    options={PNP_REPORT_TITLE_SUGGESTIONS}
+                    placeholder="Select or type report title..."
+                    searchPlaceholder="Search or type custom title..."
+                    emptyText="No suggestions found. Type your custom title."
                     disabled={isSubmitting}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Select from suggestions or type your own custom title
+                  </p>
                 </div>
 
                 <div className="space-y-2">

@@ -20,16 +20,17 @@ import { toast } from 'sonner'
 interface DeleteConcernDialogProps {
   concernId: string
   concernTitle: string
+  collectionName?: string
 }
 
-export function DeleteConcernDialog({ concernId, concernTitle }: DeleteConcernDialogProps) {
+export function DeleteConcernDialog({ concernId, concernTitle, collectionName = 'concerns' }: DeleteConcernDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
     setIsDeleting(true)
     
     try {
-      await deleteDoc(doc(db, 'concerns', concernId))
+      await deleteDoc(doc(db, collectionName, concernId))
       
       toast.success('Concern Deleted', {
         description: 'The concern has been permanently removed',

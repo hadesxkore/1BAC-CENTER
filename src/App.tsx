@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import StaffLayout from './pages/staff/StaffLayout'
 import Dashboard from './pages/staff/Dashboard'
 import ActionCenter from './pages/staff/ActionCenter'
+import OneBAC from './pages/staff/OneBAC'
 import PNP from './pages/staff/PNP'
 import Report from './pages/staff/Report'
 import Users from './pages/staff/Users'
@@ -27,6 +28,7 @@ function App() {
         >
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="action-center" element={<ActionCenter />} />
+          <Route path="1bac" element={<OneBAC />} />
           <Route path="pnp" element={<PNP />} />
           <Route path="report" element={<Report />} />
           <Route path="users" element={<Users />} />

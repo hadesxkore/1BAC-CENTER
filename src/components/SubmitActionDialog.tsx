@@ -21,10 +21,11 @@ import type { ConcernImage } from '@/data/sampleActions'
 interface SubmitActionDialogProps {
   concernId: string
   concernTitle: string
+  collectionName?: string
   onSubmit?: (actionData: { photos: ConcernImage[]; notes: string }) => void
 }
 
-export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: SubmitActionDialogProps) {
+export function SubmitActionDialog({ concernId, concernTitle, collectionName = 'concerns', onSubmit }: SubmitActionDialogProps) {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -163,7 +164,7 @@ export function SubmitActionDialog({ concernId, concernTitle, onSubmit }: Submit
       }
 
       // Update Firestore document
-      const concernRef = doc(db, 'concerns', concernId)
+      const concernRef = doc(db, collectionName, concernId)
       await updateDoc(concernRef, {
         actionTaken: actionTakenData,
         actionDate: format(actionDate, 'yyyy-MM-dd'), // Use selected date

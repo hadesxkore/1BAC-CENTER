@@ -16,14 +16,15 @@ export const getCloudinaryUploadUrl = () => {
 export const compressImage = async (file: File): Promise<File> => {
   const fileSizeInMB = file.size / 1024 / 1024
   
-  // Only compress if file is larger than 1.5MB
-  if (fileSizeInMB > 1.5) {
+  // Only compress if file is larger than 1.2MB (reduced threshold)
+  if (fileSizeInMB > 1.2) {
     const options = {
-      maxSizeMB: 1.2, // Reduced for faster compression
-      maxWidthOrHeight: 1600, // Reduced resolution for faster upload
+      maxSizeMB: 1, // Reduced to 1MB for faster compression
+      maxWidthOrHeight: 1400, // Reduced resolution for faster upload
       useWebWorker: true,
       fileType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
-      initialQuality: 0.8, // Slightly lower quality for faster compression
+      initialQuality: 0.75, // Lower quality for faster compression
+      alwaysKeepResolution: false, // Allow resolution reduction
     }
     
     try {
@@ -36,6 +37,38 @@ export const compressImage = async (file: File): Promise<File> => {
   }
   
   return file
+}
+
+// Helper function to upload image to Cloudinary (without compression - compression done separately)
+export const uploadToCloudinaryDirect = async (file: File) => {
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("upload_preset", cloudinaryConfig.presetName)
+
+  try {
+    const response = await fetch(getCloudinaryUploadUrl(), {
+      method: "POST",
+      body: formData,
+    })
+
+    if (!response.ok) {
+      throw new Error("Upload failed")
+    }
+
+    const data = await response.json()
+    return {
+      success: true,
+      url: data.secure_url,
+      publicId: data.public_id,
+      data,
+    }
+  } catch (error) {
+    console.error("Cloudinary upload error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Upload failed",
+    }
+  }
 }
 
 // Helper function to upload image to Cloudinary
@@ -74,14 +107,19 @@ export const uploadToCloudinary = async (file: File) => {
   }
 }
 
-// Helper function to upload multiple images in parallel
+// Helper function to upload multiple images in parallel with compression
 export const uploadMultipleToCloudinary = async (
   files: File[],
   onProgress?: (completed: number, total: number) => void
 ) => {
-  const uploadPromises = files.map(async (file, index) => {
+  // Step 1: Compress all images in parallel first
+  const compressionPromises = files.map(file => compressImage(file))
+  const compressedFiles = await Promise.all(compressionPromises)
+  
+  // Step 2: Upload all compressed images in parallel
+  const uploadPromises = compressedFiles.map(async (file, index) => {
     try {
-      const result = await uploadToCloudinary(file)
+      const result = await uploadToCloudinaryDirect(file)
       if (onProgress) {
         onProgress(index + 1, files.length)
       }

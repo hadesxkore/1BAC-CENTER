@@ -51,7 +51,11 @@ interface ConcernImage {
   file?: File
 }
 
-export function AddConcernDialog() {
+interface AddConcernDialogProps {
+  collectionName?: string
+}
+
+export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDialogProps = {}) {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -92,30 +96,17 @@ export function AddConcernDialog() {
   const handleFileSelect = async (files: FileList | null) => {
     if (!files) return
     
-    setIsCompressing(true)
     const newImages: ConcernImage[] = []
     
     for (let i = 0; i < Math.min(files.length, 5 - images.length); i++) {
       const file = files[i]
       if (file.type.startsWith('image/')) {
-        // Check if compression is needed
-        const fileSizeInMB = file.size / 1024 / 1024
-        let processedFile = file
-        
-        if (fileSizeInMB > 1.5) {
-          toast.info(`Compressing ${file.name}...`)
-          processedFile = await compressImage(file)
-          const compressedSizeInMB = processedFile.size / 1024 / 1024
-          toast.success(`Compressed from ${fileSizeInMB.toFixed(2)}MB to ${compressedSizeInMB.toFixed(2)}MB`)
-        }
-        
-        const url = URL.createObjectURL(processedFile)
-        newImages.push({ url, publicId: '', file: processedFile })
+        const url = URL.createObjectURL(file)
+        newImages.push({ url, publicId: '', file })
       }
     }
     
     setImages([...images, ...newImages])
-    setIsCompressing(false)
     
     if (files.length + images.length > 5) {
       toast.warning('Maximum 5 images allowed')
@@ -184,9 +175,9 @@ export function AddConcernDialog() {
       // Prepare files for parallel upload
       const files = images.map(img => img.file!).filter(Boolean)
       
-      toast.info(`Uploading ${totalImages} images in parallel...`)
+      toast.info(`Compressing and uploading ${totalImages} images...`)
       
-      // Upload images in parallel
+      // Upload images in parallel (compression happens inside)
       const results = await uploadMultipleToCloudinary(files, (completed, total) => {
         setUploadProgress((completed / total) * 100)
       })
@@ -201,6 +192,8 @@ export function AddConcernDialog() {
         url: r.url!,
         publicId: r.publicId!,
       }))
+      
+      toast.info('Saving to database...')
       
       // Save to Firestore
       const concernData = {
@@ -222,7 +215,7 @@ export function AddConcernDialog() {
         createdBy: user?.id || '',
       }
       
-      await addDoc(collection(db, 'concerns'), concernData)
+      await addDoc(collection(db, collectionName), concernData)
       
       toast.success('Concern Reported Successfully!', {
         description: `Uploaded ${totalImages} images and saved report`,
@@ -429,7 +422,7 @@ export function AddConcernDialog() {
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t">
-                  <Button type="submit" disabled={isSubmitting || isCompressing} className="flex-1">
+                  <Button type="submit" disabled={isSubmitting} className="flex-1">
                     {isSubmitting ? (
                       <div className="flex items-center gap-2">
                         <motion.div
@@ -437,22 +430,13 @@ export function AddConcernDialog() {
                           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                           className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
                         />
-                        <span>Uploading...</span>
-                      </div>
-                    ) : isCompressing ? (
-                      <div className="flex items-center gap-2">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
-                        />
-                        <span>Compressing...</span>
+                        <span>Processing...</span>
                       </div>
                     ) : (
                       'Submit Report'
                     )}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting || isCompressing}>
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>
                     Cancel
                   </Button>
                 </div>
@@ -467,7 +451,9 @@ export function AddConcernDialog() {
                       className="space-y-2"
                     >
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Uploading images...</span>
+                        <span className="text-muted-foreground">
+                          {uploadProgress < 100 ? 'Uploading images...' : 'Saving to database...'}
+                        </span>
                         <span className="font-medium">{Math.round(uploadProgress)}%</span>
                       </div>
                       <Progress value={uploadProgress} className="h-2" />

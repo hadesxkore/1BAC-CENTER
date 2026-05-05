@@ -38,6 +38,7 @@ import {
   Settings02Icon,
   Logout03Icon,
   SecurityIcon,
+  Building03Icon,
 } from '@hugeicons/core-free-icons'
 
 const menuItems = [
@@ -51,6 +52,12 @@ const menuItems = [
     title: 'Action Center',
     icon: AlertCircleIcon,
     path: '/staff/action-center',
+    roles: ['staff', 'environmental', 'agricultural'], // All roles
+  },
+  {
+    title: '1BAC',
+    icon: Building03Icon,
+    path: '/staff/1bac',
     roles: ['staff', 'environmental', 'agricultural'], // All roles
   },
   {
@@ -292,6 +299,16 @@ export default function StaffLayout() {
       title: 'Action Center',
       icon: AlertCircleIcon,
       path: '/staff/action-center',
+    },
+    {
+      title: '1BAC',
+      icon: Building03Icon,
+      path: '/staff/1bac',
+    },
+    {
+      title: 'PNP',
+      icon: SecurityIcon,
+      path: '/staff/pnp',
     },
     {
       title: 'Report',

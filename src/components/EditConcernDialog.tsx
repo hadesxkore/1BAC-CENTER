@@ -33,9 +33,10 @@ interface ConcernImage {
 
 interface EditConcernDialogProps {
   concern: Action
+  collectionName?: string
 }
 
-export function EditConcernDialog({ concern }: EditConcernDialogProps) {
+export function EditConcernDialog({ concern, collectionName = 'concerns' }: EditConcernDialogProps) {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -202,7 +203,7 @@ export function EditConcernDialog({ concern }: EditConcernDialogProps) {
       }
       
       // Update Firestore
-      const concernRef = doc(db, 'concerns', concern.id)
+      const concernRef = doc(db, collectionName, concern.id)
       await updateDoc(concernRef, {
         dateReported,
         municipality,

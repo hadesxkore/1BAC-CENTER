@@ -143,6 +143,19 @@ maxAgeSeconds: 30 days
 
 ## Troubleshooting
 
+### Vercel Deployment Issues
+
+#### Peer Dependency Errors
+If you encounter peer dependency errors during deployment:
+1. Ensure `.npmrc` file exists with `legacy-peer-deps=true`
+2. This allows installation despite peer dependency conflicts with Vite 8
+
+#### Build Cache Size Error
+If you see "Assets exceeding the limit" error:
+- The `maximumFileSizeToCacheInBytes` is set to 5 MB in `vite.config.ts`
+- This accommodates the large bundle size from Firebase and other dependencies
+- The main bundle is ~3 MB (gzipped to ~900 KB)
+
 ### Install Button Not Showing
 - Ensure you're using HTTPS
 - Check if already installed

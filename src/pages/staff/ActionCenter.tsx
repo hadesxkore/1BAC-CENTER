@@ -18,6 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { DatePicker } from '@/components/ui/date-picker'
 import {
   Select,
   SelectContent,
@@ -38,15 +40,23 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Search01Icon,
   ArrowUp01Icon,
   ArrowDown01Icon,
   MoreVerticalIcon,
+  FilterIcon,
+  Download01Icon,
 } from '@hugeicons/core-free-icons'
 import type { Action, ActionStatus } from '@/data/sampleActions'
-import { format } from 'date-fns'
+import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
+import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
 import { AddConcernDialog } from '@/components/AddConcernDialog'
 import { SubmitActionDialog } from '@/components/SubmitActionDialog'
 import { ViewConcernDialog } from '@/components/ViewConcernDialog'
@@ -55,6 +65,8 @@ import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { toast } from 'sonner'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const statusColors: Record<ActionStatus, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
@@ -85,6 +97,15 @@ export default function ActionCenter() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [municipalityFilter, setMunicipalityFilter] = useState<string>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
+  const [advancedSearch, setAdvancedSearch] = useState({
+    location: '',
+    assignedTo: '',
+    reportedBy: ''
+  })
   const [concerns, setConcerns] = useState<Action[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -310,10 +331,44 @@ export default function ActionCenter() {
   // Apply filters with useMemo
   const filteredData = useMemo(() => {
     return concerns.filter((action) => {
+      // Status filter
       if (statusFilter !== 'all' && action.status !== statusFilter) return false
+      
+      // Municipality filter
+      if (municipalityFilter !== 'all' && action.municipality !== municipalityFilter) return false
+      
+      // Category filter
+      if (categoryFilter !== 'all' && action.category !== categoryFilter) return false
+      
+      // Date range filter
+      if (dateFrom || dateTo) {
+        const actionDate = new Date(action.dateReported)
+        if (dateFrom && dateTo) {
+          if (!isWithinInterval(actionDate, { 
+            start: startOfDay(dateFrom), 
+            end: endOfDay(dateTo) 
+          })) return false
+        } else if (dateFrom) {
+          if (actionDate < startOfDay(dateFrom)) return false
+        } else if (dateTo) {
+          if (actionDate > endOfDay(dateTo)) return false
+        }
+      }
+      
+      // Advanced search filters
+      if (advancedSearch.location && !action.location.toLowerCase().includes(advancedSearch.location.toLowerCase())) {
+        return false
+      }
+      if (advancedSearch.assignedTo && !action.assignedTo.toLowerCase().includes(advancedSearch.assignedTo.toLowerCase())) {
+        return false
+      }
+      if (advancedSearch.reportedBy && !action.answeredBy.toLowerCase().includes(advancedSearch.reportedBy.toLowerCase())) {
+        return false
+      }
+      
       return true
     })
-  }, [concerns, statusFilter])
+  }, [concerns, statusFilter, municipalityFilter, categoryFilter, dateFrom, dateTo, advancedSearch])
 
   const table = useReactTable({
     data: filteredData,
@@ -343,6 +398,266 @@ export default function ActionCenter() {
     pending: concerns.filter((a) => a.status === 'pending').length,
     completed: concerns.filter((a) => a.status === 'completed').length,
   }), [concerns])
+
+  // Export filtered data as PDF with full details
+  const exportFilteredPDF = async () => {
+    if (filteredData.length === 0) {
+      toast.error('No data to export')
+      return
+    }
+
+    toast.info('Generating PDF... This may take a moment.')
+
+    const doc = new jsPDF('p', 'mm', 'a4')
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 14
+    let yPosition = 20
+
+    // Header
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Action Center - Detailed Report', margin, yPosition)
+    
+    yPosition += 8
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 100, 100)
+    doc.text(`Generated: ${format(new Date(), 'MMM dd, yyyy HH:mm')}`, margin, yPosition)
+    doc.text(`Total Records: ${filteredData.length}`, pageWidth - margin - 30, yPosition)
+    
+    yPosition += 10
+    doc.setTextColor(0, 0, 0)
+
+    // Process each concern
+    for (let i = 0; i < filteredData.length; i++) {
+      const item = filteredData[i]
+      
+      // Check if we need a new page
+      if (yPosition > pageHeight - 60) {
+        doc.addPage()
+        yPosition = 20
+      }
+
+      // Concern box
+      doc.setDrawColor(200, 200, 200)
+      doc.setFillColor(249, 250, 251)
+      doc.roundedRect(margin, yPosition, pageWidth - 2 * margin, 10, 2, 2, 'FD')
+      
+      // Concern number and status
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Concern #${i + 1}`, margin + 3, yPosition + 6)
+      
+      // Status badge
+      const statusX = pageWidth - margin - 25
+      if (item.status === 'completed') {
+        doc.setFillColor(220, 252, 231)
+        doc.setTextColor(22, 163, 74)
+      } else {
+        doc.setFillColor(254, 249, 195)
+        doc.setTextColor(161, 98, 7)
+      }
+      doc.roundedRect(statusX, yPosition + 2, 22, 6, 1, 1, 'F')
+      doc.setFontSize(8)
+      doc.text(item.status.toUpperCase(), statusX + 11, yPosition + 6, { align: 'center' })
+      
+      yPosition += 15
+      doc.setTextColor(0, 0, 0)
+      doc.setFont('helvetica', 'normal')
+
+      // Details in two columns
+      doc.setFontSize(9)
+      const col1X = margin + 3
+      const col2X = pageWidth / 2 + 5
+      const lineHeight = 5
+
+      // Column 1
+      doc.setFont('helvetica', 'bold')
+      doc.text('Date Reported:', col1X, yPosition)
+      doc.setFont('helvetica', 'normal')
+      doc.text(format(new Date(item.dateReported), 'MMM dd, yyyy'), col1X + 30, yPosition)
+      
+      yPosition += lineHeight
+      doc.setFont('helvetica', 'bold')
+      doc.text('Municipality:', col1X, yPosition)
+      doc.setFont('helvetica', 'normal')
+      doc.text(item.municipality, col1X + 30, yPosition)
+      
+      yPosition += lineHeight
+      doc.setFont('helvetica', 'bold')
+      doc.text('Category:', col1X, yPosition)
+      doc.setFont('helvetica', 'normal')
+      doc.text(item.category, col1X + 30, yPosition)
+
+      // Column 2
+      yPosition -= lineHeight * 2
+      doc.setFont('helvetica', 'bold')
+      doc.text('Answered By:', col2X, yPosition)
+      doc.setFont('helvetica', 'normal')
+      doc.text(item.answeredBy, col2X + 30, yPosition)
+      
+      yPosition += lineHeight
+      doc.setFont('helvetica', 'bold')
+      doc.text('Action Date:', col2X, yPosition)
+      doc.setFont('helvetica', 'normal')
+      doc.text(item.actionDate ? format(new Date(item.actionDate), 'MMM dd, yyyy') : 'N/A', col2X + 30, yPosition)
+
+      yPosition += lineHeight * 2
+
+      // Report Title
+      doc.setFont('helvetica', 'bold')
+      doc.text('Report Title:', col1X, yPosition)
+      yPosition += 4
+      doc.setFont('helvetica', 'normal')
+      const titleLines = doc.splitTextToSize(item.reportTitle, pageWidth - 2 * margin - 6)
+      doc.text(titleLines, col1X, yPosition)
+      yPosition += titleLines.length * 4
+
+      // Location
+      doc.setFont('helvetica', 'bold')
+      doc.text('Location:', col1X, yPosition)
+      yPosition += 4
+      doc.setFont('helvetica', 'normal')
+      const locationLines = doc.splitTextToSize(item.location, pageWidth - 2 * margin - 6)
+      doc.text(locationLines, col1X, yPosition)
+      yPosition += locationLines.length * 4
+
+      // Case Remarks
+      if (item.caseRemarks) {
+        doc.setFont('helvetica', 'bold')
+        doc.text('Remarks:', col1X, yPosition)
+        yPosition += 4
+        doc.setFont('helvetica', 'normal')
+        const remarksLines = doc.splitTextToSize(item.caseRemarks, pageWidth - 2 * margin - 6)
+        doc.text(remarksLines, col1X, yPosition)
+        yPosition += remarksLines.length * 4
+      }
+
+      // Images section
+      yPosition += 3
+
+      // Concern Photos
+      if (item.concernPhotos && item.concernPhotos.length > 0) {
+        // Check if we need a new page for images
+        if (yPosition > pageHeight - 50) {
+          doc.addPage()
+          yPosition = 20
+        }
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.text(`Concern Photos (${item.concernPhotos.length}):`, col1X, yPosition)
+        yPosition += 5
+
+        try {
+          const imgWidth = 35
+          const imgHeight = 35
+          const imgsPerRow = 4
+          const imgSpacing = 3
+
+          for (let j = 0; j < Math.min(item.concernPhotos.length, 4); j++) {
+            const xPos = col1X + (j % imgsPerRow) * (imgWidth + imgSpacing)
+            const yPos = yPosition + Math.floor(j / imgsPerRow) * (imgHeight + imgSpacing)
+
+            // Check if we need a new page
+            if (yPos + imgHeight > pageHeight - margin) {
+              doc.addPage()
+              yPosition = 20
+            }
+
+            try {
+              doc.addImage(item.concernPhotos[j].url, 'JPEG', xPos, yPos, imgWidth, imgHeight)
+            } catch (err) {
+              // If image fails, draw a placeholder
+              doc.setDrawColor(200, 200, 200)
+              doc.rect(xPos, yPos, imgWidth, imgHeight)
+              doc.setFontSize(7)
+              doc.text('Image', xPos + imgWidth / 2, yPos + imgHeight / 2, { align: 'center' })
+            }
+          }
+          yPosition += Math.ceil(Math.min(item.concernPhotos.length, 4) / imgsPerRow) * (imgHeight + imgSpacing) + 5
+        } catch (error) {
+          console.error('Error adding concern photos:', error)
+          yPosition += 5
+        }
+      }
+
+      // Action Taken Photos
+      if (item.actionTaken && item.actionTaken.photos && item.actionTaken.photos.length > 0) {
+        // Check if we need a new page for images
+        if (yPosition > pageHeight - 50) {
+          doc.addPage()
+          yPosition = 20
+        }
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.text(`Action Taken Photos (${item.actionTaken.photos.length}):`, col1X, yPosition)
+        yPosition += 5
+
+        try {
+          const imgWidth = 35
+          const imgHeight = 35
+          const imgsPerRow = 4
+          const imgSpacing = 3
+
+          for (let j = 0; j < Math.min(item.actionTaken.photos.length, 4); j++) {
+            const xPos = col1X + (j % imgsPerRow) * (imgWidth + imgSpacing)
+            const yPos = yPosition + Math.floor(j / imgsPerRow) * (imgHeight + imgSpacing)
+
+            // Check if we need a new page
+            if (yPos + imgHeight > pageHeight - margin) {
+              doc.addPage()
+              yPosition = 20
+            }
+
+            try {
+              doc.addImage(item.actionTaken.photos[j].url, 'JPEG', xPos, yPos, imgWidth, imgHeight)
+            } catch (err) {
+              // If image fails, draw a placeholder
+              doc.setDrawColor(200, 200, 200)
+              doc.rect(xPos, yPos, imgWidth, imgHeight)
+              doc.setFontSize(7)
+              doc.text('Image', xPos + imgWidth / 2, yPos + imgHeight / 2, { align: 'center' })
+            }
+          }
+          yPosition += Math.ceil(Math.min(item.actionTaken.photos.length, 4) / imgsPerRow) * (imgHeight + imgSpacing) + 5
+        } catch (error) {
+          console.error('Error adding action photos:', error)
+          yPosition += 5
+        }
+
+        // Action notes
+        if (item.actionTaken.notes) {
+          doc.setFont('helvetica', 'bold')
+          doc.text('Action Notes:', col1X, yPosition)
+          yPosition += 4
+          doc.setFont('helvetica', 'normal')
+          const notesLines = doc.splitTextToSize(item.actionTaken.notes, pageWidth - 2 * margin - 6)
+          doc.text(notesLines, col1X, yPosition)
+          yPosition += notesLines.length * 4
+        }
+      }
+
+      yPosition += 8
+    }
+
+    doc.save(`action-center-detailed-${format(new Date(), 'yyyy-MM-dd')}.pdf`)
+    toast.success('PDF exported successfully!')
+  }
+
+  // Clear all filters
+  const clearFilters = () => {
+    setStatusFilter('all')
+    setMunicipalityFilter('all')
+    setCategoryFilter('all')
+    setDateFrom(undefined)
+    setDateTo(undefined)
+    setAdvancedSearch({ location: '', assignedTo: '', reportedBy: '' })
+    table.getColumn('reportTitle')?.setFilterValue('')
+    toast.success('All filters cleared')
+  }
 
   if (isLoading) {
     return (
@@ -417,32 +732,131 @@ export default function ActionCenter() {
           </CardHeader>
           <CardContent>
             {/* Filters and Search */}
-            <div className="flex flex-col md:flex-row gap-4 mb-4">
-              <div className="flex-1 relative">
-                <HugeiconsIcon
-                  icon={Search01Icon}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-                />
-                <Input
-                  placeholder="Search reports..."
-                  value={(table.getColumn('reportTitle')?.getFilterValue() as string) ?? ''}
-                  onChange={(event) =>
-                    table.getColumn('reportTitle')?.setFilterValue(event.target.value)
-                  }
-                  className="pl-9"
-                />
+            <div className="space-y-4 mb-4">
+              {/* Primary Filters Row */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                  />
+                  <Input
+                    placeholder="Search report title..."
+                    value={(table.getColumn('reportTitle')?.getFilterValue() as string) ?? ''}
+                    onChange={(event) =>
+                      table.getColumn('reportTitle')?.setFilterValue(event.target.value)
+                    }
+                    className="pl-9"
+                  />
+                </div>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full md:w-[150px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={municipalityFilter} onValueChange={setMunicipalityFilter}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Municipality" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Municipalities</SelectItem>
+                    {BATAAN_MUNICIPALITIES.map((muni) => (
+                      <SelectItem key={muni} value={muni}>
+                        {muni}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full md:w-[150px]">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="environmental">Environmental</SelectItem>
+                    <SelectItem value="agricultural">Agricultural</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-[150px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Advanced Filters - Collapsible */}
+              <Collapsible>
+                <div className="flex items-center justify-between">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <HugeiconsIcon icon={FilterIcon} className="w-4 h-4 mr-2" />
+                      Advanced Filters
+                    </Button>
+                  </CollapsibleTrigger>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      Clear All
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={exportFilteredPDF}>
+                      <HugeiconsIcon icon={Download01Icon} className="w-4 h-4 mr-2" />
+                      Export ({filteredData.length})
+                    </Button>
+                  </div>
+                </div>
+                
+                <CollapsibleContent className="mt-4 space-y-4">
+                  {/* Date Range */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Date From</Label>
+                      <DatePicker
+                        date={dateFrom}
+                        onDateChange={setDateFrom}
+                        placeholder="Select start date"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date To</Label>
+                      <DatePicker
+                        date={dateTo}
+                        onDateChange={setDateTo}
+                        placeholder="Select end date"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Advanced Search Fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Location</Label>
+                      <Input
+                        placeholder="Search by location..."
+                        value={advancedSearch.location}
+                        onChange={(e) => setAdvancedSearch({ ...advancedSearch, location: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Assigned To</Label>
+                      <Input
+                        placeholder="Search by assigned to..."
+                        value={advancedSearch.assignedTo}
+                        onChange={(e) => setAdvancedSearch({ ...advancedSearch, assignedTo: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Reported By</Label>
+                      <Input
+                        placeholder="Search by reported by..."
+                        value={advancedSearch.reportedBy}
+                        onChange={(e) => setAdvancedSearch({ ...advancedSearch, reportedBy: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </div>
 
             {/* Table with horizontal scroll */}

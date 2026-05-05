@@ -27,6 +27,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { PWAInstallPrompt } from '@/components/PWAInstallPrompt'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   DashboardSpeed01Icon, 
@@ -321,6 +323,7 @@ export default function StaffLayout() {
                   {currentPageTitle}
                 </h1>
               </div>
+              <ThemeToggle />
             </div>
           </header>
 
@@ -336,6 +339,7 @@ export default function StaffLayout() {
           </div>
         </main>
       </div>
+      <PWAInstallPrompt />
     </SidebarProvider>
   )
 }

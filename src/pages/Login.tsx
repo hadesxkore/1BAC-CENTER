@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 // Floating glass panel data
 const glassPanels = [
@@ -239,8 +240,13 @@ export default function Login() {
         initial={{ opacity: 0, x: 50 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.8 }}
-        className="w-full lg:w-[40%] flex items-center justify-center p-8 bg-background"
+        className="w-full lg:w-[40%] flex items-center justify-center p-8 bg-background relative"
       >
+        {/* Theme Toggle - Top Right */}
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
+
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <motion.div

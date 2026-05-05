@@ -58,6 +58,7 @@ import type { Action, ActionStatus } from '@/data/sampleActions'
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
 import { AddConcernDialog } from '@/components/AddConcernDialog'
+import { Add1BACConcernDialog } from '@/components/Add1BACConcernDialog'
 import { SubmitActionDialog } from '@/components/SubmitActionDialog'
 import { ViewConcernDialog } from '@/components/ViewConcernDialog'
 import { EditConcernDialog } from '@/components/EditConcernDialog'
@@ -98,7 +99,7 @@ export default function OneBAC() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [municipalityFilter, setMunicipalityFilter] = useState<string>('all')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [concernTypeFilter, setConcernTypeFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
   const [advancedSearch, setAdvancedSearch] = useState({
@@ -338,8 +339,8 @@ export default function OneBAC() {
       // Municipality filter
       if (municipalityFilter !== 'all' && action.municipality !== municipalityFilter) return false
       
-      // Category filter
-      if (categoryFilter !== 'all' && action.category !== categoryFilter) return false
+      // Concern Type filter (stored in category field)
+      if (concernTypeFilter !== 'all' && action.category !== concernTypeFilter) return false
       
       // Date range filter
       if (dateFrom || dateTo) {
@@ -369,7 +370,7 @@ export default function OneBAC() {
       
       return true
     })
-  }, [concerns, statusFilter, municipalityFilter, categoryFilter, dateFrom, dateTo, advancedSearch])
+  }, [concerns, statusFilter, municipalityFilter, concernTypeFilter, dateFrom, dateTo, advancedSearch])
 
   const table = useReactTable({
     data: filteredData,
@@ -487,7 +488,7 @@ export default function OneBAC() {
       
       yPosition += lineHeight
       doc.setFont('helvetica', 'bold')
-      doc.text('Category:', col1X, yPosition)
+      doc.text('Concern Type:', col1X, yPosition)
       doc.setFont('helvetica', 'normal')
       doc.text(item.category, col1X + 30, yPosition)
 
@@ -652,7 +653,7 @@ export default function OneBAC() {
   const clearFilters = () => {
     setStatusFilter('all')
     setMunicipalityFilter('all')
-    setCategoryFilter('all')
+    setConcernTypeFilter('all')
     setDateFrom(undefined)
     setDateTo(undefined)
     setAdvancedSearch({ location: '', assignedTo: '', reportedBy: '' })
@@ -682,7 +683,7 @@ export default function OneBAC() {
           </p>
         </div>
         <div className="shrink-0">
-          <AddConcernDialog collectionName="1bac_concerns" />
+          <Add1BACConcernDialog />
         </div>
       </div>
 
@@ -776,14 +777,19 @@ export default function OneBAC() {
                   </SelectContent>
                 </Select>
 
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="w-full md:w-[150px]">
-                    <SelectValue placeholder="Category" />
+                <Select value={concernTypeFilter} onValueChange={setConcernTypeFilter}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Concern Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="environmental">Environmental</SelectItem>
-                    <SelectItem value="agricultural">Agricultural</SelectItem>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="Infrastructure">Infrastructure</SelectItem>
+                    <SelectItem value="Public Safety">Public Safety</SelectItem>
+                    <SelectItem value="Health & Sanitation">Health & Sanitation</SelectItem>
+                    <SelectItem value="Traffic & Transportation">Traffic & Transportation</SelectItem>
+                    <SelectItem value="Utilities">Utilities</SelectItem>
+                    <SelectItem value="Community Services">Community Services</SelectItem>
+                    <SelectItem value="Others">Others</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -63,6 +63,7 @@ import { SubmitActionDialog } from '@/components/SubmitActionDialog'
 import { ViewConcernDialog } from '@/components/ViewConcernDialog'
 import { EditConcernDialog } from '@/components/EditConcernDialog'
 import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
+import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { toast } from 'sonner'
@@ -71,6 +72,7 @@ import autoTable from 'jspdf-autotable'
 
 const statusColors: Record<ActionStatus, string> = {
   pending: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+  'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 }
 
@@ -398,6 +400,7 @@ export default function OneBAC() {
   const stats = useMemo(() => ({
     total: concerns.length,
     pending: concerns.filter((a) => a.status === 'pending').length,
+    inProgress: concerns.filter((a) => a.status === 'in-progress').length,
     completed: concerns.filter((a) => a.status === 'completed').length,
   }), [concerns])
 
@@ -688,7 +691,7 @@ export default function OneBAC() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="border-purple-200">
             <CardHeader className="pb-3">
@@ -712,6 +715,17 @@ export default function OneBAC() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <Card className="border-purple-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-blue-700">In Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <Card className="border-purple-200">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-green-700">Completed</CardTitle>
@@ -759,6 +773,7 @@ export default function OneBAC() {
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="in-progress">In Progress</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>

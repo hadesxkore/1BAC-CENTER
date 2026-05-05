@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { DatePicker } from '@/components/ui/date-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
@@ -32,6 +33,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [isCompressing, setIsCompressing] = useState(false)
   const [notes, setNotes] = useState('')
   const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
+  const [actionStatus, setActionStatus] = useState<'in-progress' | 'completed'>('completed')
   const [images, setImages] = useState<ConcernImage[]>([])
   const { user } = useAppStore()
   
@@ -168,7 +170,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       await updateDoc(concernRef, {
         actionTaken: actionTakenData,
         actionDate: format(actionDate, 'yyyy-MM-dd'), // Use selected date
-        status: 'completed',
+        status: actionStatus,
         updatedAt: serverTimestamp(),
       })
       
@@ -217,18 +219,36 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
           <ScrollArea className="h-full">
             <form onSubmit={handleSubmit} className="px-6 py-6">
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="actionDate">Action Date *</Label>
-                  <DatePicker
-                    date={actionDate}
-                    onDateChange={setActionDate}
-                    placeholder="Select action date"
-                    disabled={isSubmitting}
-                    maxDate={new Date()}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Select the date when the action was taken
-                  </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="actionDate">Action Date *</Label>
+                    <DatePicker
+                      date={actionDate}
+                      onDateChange={setActionDate}
+                      placeholder="Select action date"
+                      disabled={isSubmitting}
+                      maxDate={new Date()}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Select the date when the action was taken
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="actionStatus">Action Status *</Label>
+                    <Select value={actionStatus} onValueChange={(value: 'in-progress' | 'completed') => setActionStatus(value)} disabled={isSubmitting}>
+                      <SelectTrigger id="actionStatus">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Select "In Progress" if more work/photos will follow
+                    </p>
+                  </div>
                 </div>
 
                 <div className="space-y-2" onPaste={handlePaste}>

@@ -314,6 +314,7 @@ export default function OneBAC() {
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => {
+        const isInProgress = row.original.status === 'in-progress'
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -324,6 +325,13 @@ export default function OneBAC() {
             <DropdownMenuContent align="end">
               <ViewConcernDialog action={row.original} />
               <EditConcernDialog concern={row.original} collectionName="1bac_concerns" />
+              {isInProgress && (
+                <MarkAsCompletedDialog 
+                  concernId={row.original.id} 
+                  concernTitle={row.original.reportTitle}
+                  collectionName="1bac_concerns"
+                />
+              )}
               <DeleteConcernDialog concernId={row.original.id} concernTitle={row.original.reportTitle} collectionName="1bac_concerns" />
             </DropdownMenuContent>
           </DropdownMenu>

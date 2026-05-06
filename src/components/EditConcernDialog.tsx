@@ -32,6 +32,9 @@ interface ConcernImage {
   url: string
   publicId: string
   file?: File
+  fileType?: 'image' | 'document'
+  fileName?: string
+  fileSize?: number
 }
 
 interface EditConcernDialogProps {

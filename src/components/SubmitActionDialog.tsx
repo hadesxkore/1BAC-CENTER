@@ -116,11 +116,6 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (images.length === 0) {
-      toast.error('Please upload at least one action photo')
-      return
-    }
 
     if (!notes.trim()) {
       toast.error('Please provide action notes')
@@ -136,38 +131,43 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
     setUploadProgress(0)
     
     try {
-      const totalImages = images.length
+      let uploadedImages: { url: string; publicId: string }[] = []
       
-      // Prepare files for parallel upload
-      const files = images.map(img => (img as ConcernImage & { file?: File }).file!).filter(Boolean)
-      
-      // Upload images with progress tracking
-      const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
-        if (stage === 'compressing') {
-          const progress = (completed / total) * 50
-          setUploadProgress(progress)
-          if (completed === 0) {
-            toast.info(`Compressing ${totalImages} images...`)
+      // Only upload images if there are any
+      if (images.length > 0) {
+        const totalImages = images.length
+        
+        // Prepare files for parallel upload
+        const files = images.map(img => (img as ConcernImage & { file?: File }).file!).filter(Boolean)
+        
+        // Upload images with progress tracking
+        const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
+          if (stage === 'compressing') {
+            const progress = (completed / total) * 50
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Compressing ${totalImages} images...`)
+            }
+          } else {
+            const progress = 50 + (completed / total) * 50
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Uploading ${totalImages} images...`)
+            }
           }
-        } else {
-          const progress = 50 + (completed / total) * 50
-          setUploadProgress(progress)
-          if (completed === 0) {
-            toast.info(`Uploading ${totalImages} images...`)
-          }
+        })
+        
+        // Check if all uploads were successful
+        const failedUploads = results.filter(r => !r.success)
+        if (failedUploads.length > 0) {
+          throw new Error(`Failed to upload ${failedUploads.length} image(s)`)
         }
-      })
-      
-      // Check if all uploads were successful
-      const failedUploads = results.filter(r => !r.success)
-      if (failedUploads.length > 0) {
-        throw new Error(`Failed to upload ${failedUploads.length} image(s)`)
+        
+        uploadedImages = results.map(r => ({
+          url: r.url!,
+          publicId: r.publicId!,
+        }))
       }
-      
-      const uploadedImages = results.map(r => ({
-        url: r.url!,
-        publicId: r.publicId!,
-      }))
       
       // Prepare action taken data
       const actionTakenData = {
@@ -191,8 +191,13 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         onSubmit(actionTakenData)
       }
       
+      const statusText = actionStatus === 'completed' ? 'completed' : 'in progress'
+      const photoText = images.length > 0 
+        ? `Uploaded ${images.length} image(s) and marked as ${statusText}` 
+        : `Marked as ${statusText} (photos to follow)`
+      
       toast.success('Action Submitted Successfully!', {
-        description: `Uploaded ${totalImages} images and marked as completed`,
+        description: photoText,
       })
       
       // Reset form
@@ -284,7 +289,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                 </div>
 
                 <div className="space-y-2" onPaste={handlePaste}>
-                  <Label>Action Photos * (Max 5, Ctrl+V to paste)</Label>
+                  <Label>Action Photos (Optional - Max 5, Ctrl+V to paste)</Label>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {images.map((image, index) => (
                       <Card key={index} className="relative p-2">
@@ -324,7 +329,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                     disabled={isSubmitting}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Click to upload or paste images (Ctrl+V)
+                    Photos are optional - you can submit action notes now and add photos later
                   </p>
                 </div>
 

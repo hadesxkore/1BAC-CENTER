@@ -295,6 +295,10 @@ export default function OneBAC() {
       cell: ({ row }) => {
         const date = row.getValue('actionDate')
         if (!date) return <span className="text-xs text-muted-foreground">-</span>
+        // Check if date is "Ongoing" or a string that can't be parsed as date
+        if (date === 'Ongoing' || isNaN(new Date(date as string).getTime())) {
+          return <div className="text-xs font-medium text-blue-600">{date as string}</div>
+        }
         return <div className="text-xs">{format(new Date(date as string), 'MMM dd, yyyy')}</div>
       },
     },

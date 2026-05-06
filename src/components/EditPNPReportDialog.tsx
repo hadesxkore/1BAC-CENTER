@@ -64,11 +64,14 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
   const [beforePhotos, setBeforePhotos] = useState<PhotoImage[]>(report.beforePhotos)
   const [afterPhotos, setAfterPhotos] = useState<PhotoImage[]>(report.afterPhotos?.photos || [])
   const [afterNotes, setAfterNotes] = useState(report.afterPhotos?.notes || '')
+  const [actionDate, setActionDate] = useState<Date | undefined>(
+    report.afterPhotos?.actionDate ? new Date(report.afterPhotos.actionDate) : undefined
+  )
   
   const beforeFileInputRef = useRef<HTMLInputElement>(null)
   const afterFileInputRef = useRef<HTMLInputElement>(null)
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens (only when opening, not when report updates)
   useEffect(() => {
     if (open) {
       setDateReported(report.dateReported ? new Date(report.dateReported) : undefined)
@@ -79,8 +82,10 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
       setBeforePhotos(report.beforePhotos)
       setAfterPhotos(report.afterPhotos?.photos || [])
       setAfterNotes(report.afterPhotos?.notes || '')
+      setActionDate(report.afterPhotos?.actionDate ? new Date(report.afterPhotos.actionDate) : undefined)
     }
-  }, [open, report])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]) // Only depend on 'open', not 'report'
 
   const handleFileSelect = async (files: FileList | null, type: 'before' | 'after') => {
     if (!files) return
@@ -251,7 +256,7 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
         updateData.afterPhotos = {
           photos: uploadedAfterPhotos,
           notes: afterNotes.trim() || report.afterPhotos?.notes || '',
-          actionDate: report.afterPhotos?.actionDate || new Date().toISOString().split('T')[0],
+          actionDate: actionDate ? format(actionDate, 'yyyy-MM-dd') : (report.afterPhotos?.actionDate || new Date().toISOString().split('T')[0]),
           submittedBy: report.afterPhotos?.submittedBy || 'Unknown',
           submittedAt: report.afterPhotos?.submittedAt || new Date().toISOString(),
         }
@@ -460,17 +465,33 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
 
                 {/* After Notes (only show if there are after photos) */}
                 {afterPhotos.length > 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="afterNotes">Action Notes</Label>
-                    <Textarea
-                      id="afterNotes"
-                      placeholder="Describe the action taken..."
-                      value={afterNotes}
-                      onChange={(e) => setAfterNotes(e.target.value)}
-                      disabled={isSubmitting}
-                      rows={4}
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="afterNotes">Action Notes</Label>
+                      <Textarea
+                        id="afterNotes"
+                        placeholder="Describe the action taken..."
+                        value={afterNotes}
+                        onChange={(e) => setAfterNotes(e.target.value)}
+                        disabled={isSubmitting}
+                        rows={4}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="actionDate">Action Date *</Label>
+                      <DatePicker
+                        date={actionDate}
+                        onDateChange={setActionDate}
+                        placeholder="Select action date"
+                        disabled={isSubmitting}
+                        maxDate={new Date()}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Select the date when the action was taken
+                      </p>
+                    </div>
+                  </>
                 )}
 
                 <div className="flex gap-2 pt-4 border-t">

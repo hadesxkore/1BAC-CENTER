@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
+import { DatePicker } from '@/components/ui/date-picker'
+import { Checkbox } from '@/components/ui/checkbox'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Edit02Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
@@ -16,6 +18,7 @@ import { uploadToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
 import type { Action, ActionCategory } from '@/data/sampleActions'
 
 const ENVIRONMENTAL_OFFICERS = [
@@ -57,11 +60,17 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     concern.actionTaken?.photos || []
   )
   const [actionNotes, setActionNotes] = useState(concern.actionTaken?.notes || '')
+  const [actionDate, setActionDate] = useState<Date | undefined>(
+    concern.actionDate && concern.actionDate !== 'Ongoing' 
+      ? new Date(concern.actionDate) 
+      : undefined
+  )
+  const [skipActionDate, setSkipActionDate] = useState(concern.actionDate === 'Ongoing')
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const actionFileInputRef = useRef<HTMLInputElement>(null)
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens (only when opening, not when concern updates)
   useEffect(() => {
     if (open) {
       setDateReported(concern.dateReported)
@@ -74,8 +83,15 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       setImages(concern.concernPhotos)
       setActionPhotos(concern.actionTaken?.photos || [])
       setActionNotes(concern.actionTaken?.notes || '')
+      setActionDate(
+        concern.actionDate && concern.actionDate !== 'Ongoing' 
+          ? new Date(concern.actionDate) 
+          : undefined
+      )
+      setSkipActionDate(concern.actionDate === 'Ongoing')
     }
-  }, [open, concern])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]) // Only depend on 'open', not 'concern'
 
   // Auto-assign based on category
   const handleCategoryChange = (value: ActionCategory) => {
@@ -309,6 +325,8 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           submittedBy: concern.actionTaken?.submittedBy || 'Unknown',
           submittedAt: concern.actionTaken?.submittedAt || new Date().toISOString(),
         }
+        // Update action date
+        updateData.actionDate = skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : null)
       }
       
       // Update Firestore
@@ -515,11 +533,25 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Action Photos (Max 5)</Label>
+                      <Label>Action Files (Max 5)</Label>
                       <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                         {actionPhotos.map((image, index) => (
                           <Card key={index} className="relative p-2">
-                            <img src={image.url} alt={`Action ${index + 1}`} className="w-full h-24 object-cover rounded" />
+                            {image.fileType === 'document' ? (
+                              <div className="w-full h-24 flex flex-col items-center justify-center bg-muted rounded">
+                                <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 text-blue-600" />
+                                <p className="text-[10px] text-center mt-1 px-1 truncate w-full">
+                                  {image.fileName || 'Document'}
+                                </p>
+                                {image.fileSize && (
+                                  <p className="text-[9px] text-muted-foreground">
+                                    {(image.fileSize / 1024 / 1024).toFixed(2)}MB
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <img src={image.url} alt={`Action ${index + 1}`} className="w-full h-24 object-cover rounded" />
+                            )}
                             <Button
                               type="button"
                               variant="destructive"
@@ -540,7 +572,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                           >
                             <div className="text-center">
                               <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 mx-auto text-muted-foreground" />
-                              <p className="text-xs text-muted-foreground mt-1">Add Photo</p>
+                              <p className="text-xs text-muted-foreground mt-1">Add File</p>
                             </div>
                           </Card>
                         )}
@@ -548,14 +580,14 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                       <input
                         ref={actionFileInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         multiple
                         className="hidden"
                         onChange={(e) => handleActionFileSelect(e.target.files)}
                         disabled={isSubmitting}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Click to add, remove, or replace action photos
+                        Click to add, remove, or replace action files (images/documents)
                       </p>
                     </div>
 
@@ -569,6 +601,39 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                         disabled={isSubmitting}
                         rows={4}
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="actionDate">Action Date {!skipActionDate && '*'}</Label>
+                      <DatePicker
+                        date={actionDate}
+                        onDateChange={setActionDate}
+                        placeholder="Select action date"
+                        disabled={isSubmitting || skipActionDate}
+                        maxDate={new Date()}
+                      />
+                      <div className="flex items-center space-x-2 mt-2">
+                        <Checkbox 
+                          id="skipActionDate" 
+                          checked={skipActionDate}
+                          onCheckedChange={(checked) => {
+                            setSkipActionDate(checked as boolean)
+                            if (checked) setActionDate(undefined)
+                          }}
+                          disabled={isSubmitting}
+                        />
+                        <label
+                          htmlFor="skipActionDate"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          No specific date (Ongoing)
+                        </label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {skipActionDate 
+                          ? 'Action date will be marked as "Ongoing"' 
+                          : 'Select the date when the action was taken'}
+                      </p>
                     </div>
                   </>
                 )}

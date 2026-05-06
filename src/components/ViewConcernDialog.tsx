@@ -182,22 +182,67 @@ export function ViewConcernDialog({ action }: ViewConcernDialogProps) {
                       <Separator />
 
                       <div>
-                        <h3 className="text-lg font-semibold mb-4">Action Photos</h3>
+                        <h3 className="text-lg font-semibold mb-4">Action Files</h3>
                         <div className="grid grid-cols-2 gap-3">
                           {action.actionTaken.photos.map((photo, index) => (
-                            <a
-                              key={index}
-                              href={photo.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block group"
-                            >
-                              <LazyImage
-                                src={photo.url}
-                                alt={`Action ${index + 1}`}
-                                className="w-full h-40 object-cover rounded-md border group-hover:opacity-80 transition-opacity cursor-pointer"
-                              />
-                            </a>
+                            photo.fileType === 'document' ? (
+                              <button
+                                key={index}
+                                onClick={() => {
+                                  // Open base64 document in new window
+                                  const newWindow = window.open()
+                                  if (newWindow) {
+                                    newWindow.document.write(`
+                                      <html>
+                                        <head>
+                                          <title>${photo.fileName || 'Document'}</title>
+                                          <style>
+                                            body { margin: 0; padding: 0; }
+                                            iframe { width: 100vw; height: 100vh; border: none; }
+                                          </style>
+                                        </head>
+                                        <body>
+                                          <iframe src="${photo.url}"></iframe>
+                                        </body>
+                                      </html>
+                                    `)
+                                    newWindow.document.close()
+                                  }
+                                }}
+                                className="block group p-4 border rounded-md hover:bg-muted transition-colors cursor-pointer text-left"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-12 h-12 bg-blue-50 dark:bg-blue-950 rounded flex items-center justify-center flex-shrink-0">
+                                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{photo.fileName || 'Document'}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {photo.fileSize ? `${(photo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'File'}
+                                    </p>
+                                  </div>
+                                  <svg className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </div>
+                              </button>
+                            ) : (
+                              <a
+                                key={index}
+                                href={photo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block group"
+                              >
+                                <LazyImage
+                                  src={photo.url}
+                                  alt={`Action ${index + 1}`}
+                                  className="w-full h-40 object-cover rounded-md border group-hover:opacity-80 transition-opacity cursor-pointer"
+                                />
+                              </a>
+                            )
                           ))}
                         </div>
                       </div>

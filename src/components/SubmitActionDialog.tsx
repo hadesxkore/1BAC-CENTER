@@ -78,8 +78,8 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
             const compressedSizeInMB = processedFile.size / 1024 / 1024
             toast.success(`✓ Compressed to ${compressedSizeInMB.toFixed(2)}MB`)
           } else {
-            // For documents, we can't compress them the same way
-            toast.warning(`Large file: ${file.name} (${fileSizeInMB.toFixed(2)}MB) - Upload may take longer`)
+            // For documents, inform user they'll be stored locally
+            toast.info(`Document added: ${file.name} (${fileSizeInMB.toFixed(2)}MB) - Will be stored in browser`)
           }
         }
         
@@ -195,9 +195,12 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
           throw new Error(`Failed to upload ${failedUploads.length} image(s)`)
         }
         
-        uploadedImages = results.map(r => ({
+        uploadedImages = results.map((r, index) => ({
           url: r.url!,
           publicId: r.publicId!,
+          fileType: images[index].fileType,
+          fileName: images[index].fileName,
+          fileSize: images[index].fileSize,
         }))
       }
       

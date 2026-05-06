@@ -272,18 +272,36 @@ export default function ActionCenter() {
           <div className="flex gap-1">
             {actionTaken.photos.slice(0, 2).map((photo, index) => (
               photo.fileType === 'document' ? (
-                <a
+                <button
                   key={index}
-                  href={photo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={() => {
+                    // Open base64 document in new window
+                    const newWindow = window.open()
+                    if (newWindow) {
+                      newWindow.document.write(`
+                        <html>
+                          <head>
+                            <title>${photo.fileName || 'Document'}</title>
+                            <style>
+                              body { margin: 0; padding: 0; }
+                              iframe { width: 100vw; height: 100vh; border: none; }
+                            </style>
+                          </head>
+                          <body>
+                            <iframe src="${photo.url}"></iframe>
+                          </body>
+                        </html>
+                      `)
+                      newWindow.document.close()
+                    }
+                  }}
                   className="w-10 h-10 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
                   title={photo.fileName || 'Document'}
                 >
                   <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
-                </a>
+                </button>
               ) : (
                 <a
                   key={index}

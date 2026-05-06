@@ -682,9 +682,6 @@ export default function PNP() {
             Monitor and manage PNP-related reports and actions
           </p>
         </div>
-        <div className="shrink-0">
-          <AddPNPReportDialog />
-        </div>
       </div>
 
       {/* Stats Cards */}
@@ -727,10 +724,15 @@ export default function PNP() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <Card className="border-blue-200">
           <CardHeader>
-            <CardTitle className="text-blue-700">PNP Reports</CardTitle>
-            <CardDescription>
-              View and manage all PNP reports
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-blue-700">PNP Reports</CardTitle>
+                <CardDescription>
+                  View and manage all PNP reports
+                </CardDescription>
+              </div>
+              <AddPNPReportDialog />
+            </div>
           </CardHeader>
           <CardContent>
             {/* Filters and Search */}

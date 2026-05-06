@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from 'react'
+  import { useState, useEffect, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import type {
   ColumnDef,
@@ -693,9 +693,6 @@ export default function OneBAC() {
             Monitor and manage all 1BAC concerns and actions
           </p>
         </div>
-        <div className="shrink-0">
-          <Add1BACConcernDialog />
-        </div>
       </div>
 
       {/* Stats Cards */}
@@ -749,10 +746,15 @@ export default function OneBAC() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <Card className="border-purple-200">
           <CardHeader>
-            <CardTitle className="text-purple-700">1BAC Concerns</CardTitle>
-            <CardDescription>
-              View and manage all 1BAC concerns
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-purple-700">1BAC Concerns</CardTitle>
+                <CardDescription>
+                  View and manage all 1BAC concerns
+                </CardDescription>
+              </div>
+              <Add1BACConcernDialog />
+            </div>
           </CardHeader>
           <CardContent>
             {/* Filters and Search */}

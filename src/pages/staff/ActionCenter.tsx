@@ -691,9 +691,6 @@ export default function ActionCenter() {
             Monitor and manage all action items and concerns
           </p>
         </div>
-        <div className="shrink-0">
-          <AddConcernDialog />
-        </div>
       </div>
 
       {/* Stats Cards */}
@@ -747,10 +744,15 @@ export default function ActionCenter() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <Card>
           <CardHeader>
-            <CardTitle>Concern Reports</CardTitle>
-            <CardDescription>
-              View and manage all reported concerns
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Concern Reports</CardTitle>
+                <CardDescription>
+                  View and manage all reported concerns
+                </CardDescription>
+              </div>
+              <AddConcernDialog />
+            </div>
           </CardHeader>
           <CardContent>
             {/* Filters and Search */}

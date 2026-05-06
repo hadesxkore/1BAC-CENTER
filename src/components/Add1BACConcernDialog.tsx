@@ -36,6 +36,9 @@ interface ConcernImage {
   url: string
   publicId: string
   file?: File
+  fileType?: 'image' | 'document'
+  fileName?: string
+  fileSize?: number
 }
 
 interface Add1BACConcernDialogProps {
@@ -47,6 +50,7 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isCompressing, setIsCompressing] = useState(false)
+  const [compressingFileName, setCompressingFileName] = useState('')
   const { user } = useAppStore()
   
   // Load existing report titles from Firestore
@@ -106,17 +110,58 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
   const handleFileSelect = async (files: FileList | null) => {
     if (!files) return
     
+    setIsCompressing(true)
     const newImages: ConcernImage[] = []
     
     for (let i = 0; i < Math.min(files.length, 5 - images.length); i++) {
       const file = files[i]
-      if (file.type.startsWith('image/')) {
-        const url = URL.createObjectURL(file)
-        newImages.push({ url, publicId: '', file })
+      const fileSizeInMB = file.size / 1024 / 1024
+      
+      // Check if it's an image or document
+      const isImage = file.type.startsWith('image/')
+      const isDocument = file.type.includes('pdf') || 
+                        file.type.includes('document') || 
+                        file.type.includes('word') ||
+                        file.type.includes('sheet') ||
+                        file.type.includes('text')
+      
+      if (isImage || isDocument) {
+        let processedFile = file
+        
+        // Compress if file is larger than 3MB
+        if (fileSizeInMB > 3) {
+          setCompressingFileName(file.name)
+          toast.info(`Compressing ${file.name}... (${fileSizeInMB.toFixed(2)}MB)`)
+          
+          if (isImage) {
+            // Compress image
+            processedFile = await compressImage(file)
+            const compressedSizeInMB = processedFile.size / 1024 / 1024
+            toast.success(`Compressed to ${compressedSizeInMB.toFixed(2)}MB`)
+          } else {
+            // For documents, we can't compress them the same way
+            // Just show a warning
+            toast.warning(`Large file: ${file.name} (${fileSizeInMB.toFixed(2)}MB)`)
+          }
+        }
+        
+        const url = URL.createObjectURL(processedFile)
+        newImages.push({ 
+          url, 
+          publicId: '', 
+          file: processedFile,
+          fileType: isImage ? 'image' : 'document',
+          fileName: file.name,
+          fileSize: processedFile.size
+        })
+      } else {
+        toast.error(`Unsupported file type: ${file.name}`)
       }
     }
     
     setImages([...images, ...newImages])
+    setIsCompressing(false)
+    setCompressingFileName('')
     
     if (files.length + images.length > 5) {
       toast.warning('Maximum 5 images allowed')

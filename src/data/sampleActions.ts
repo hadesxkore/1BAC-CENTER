@@ -4,6 +4,9 @@ export type ActionCategory = 'environmental' | 'agricultural'
 export interface ConcernImage {
   url: string
   publicId: string
+  fileType?: 'image' | 'document'
+  fileName?: string
+  fileSize?: number
 }
 
 export interface ActionTaken {

@@ -11,7 +11,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
+import { Image02Icon, Delete02Icon, File02Icon, FileAttachmentIcon } from '@hugeicons/core-free-icons'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
@@ -32,6 +32,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isCompressing, setIsCompressing] = useState(false)
+  const [compressingFileName, setCompressingFileName] = useState('')
   const [notes, setNotes] = useState('')
   const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
   const [actionStatus, setActionStatus] = useState<'in-progress' | 'completed'>('completed')
@@ -49,28 +50,59 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
     
     for (let i = 0; i < Math.min(files.length, 5 - images.length); i++) {
       const file = files[i]
-      if (file.type.startsWith('image/')) {
-        // Check if compression is needed
-        const fileSizeInMB = file.size / 1024 / 1024
+      const fileSizeInMB = file.size / 1024 / 1024
+      
+      // Check if it's an image or document
+      const isImage = file.type.startsWith('image/')
+      const isDocument = file.type.includes('pdf') || 
+                        file.type.includes('document') || 
+                        file.type.includes('word') ||
+                        file.type.includes('sheet') ||
+                        file.type.includes('text') ||
+                        file.type.includes('msword') ||
+                        file.type.includes('officedocument')
+      
+      if (isImage || isDocument) {
         let processedFile = file
         
-        if (fileSizeInMB > 1.5) {
-          toast.info(`Compressing ${file.name}...`)
-          processedFile = await compressImage(file)
-          const compressedSizeInMB = processedFile.size / 1024 / 1024
-          toast.success(`Compressed from ${fileSizeInMB.toFixed(2)}MB to ${compressedSizeInMB.toFixed(2)}MB`)
+        // Compress if file is larger than 3MB
+        if (fileSizeInMB > 3) {
+          setCompressingFileName(file.name)
+          
+          if (isImage) {
+            // Compress image
+            toast.info(`Compressing ${file.name}... (${fileSizeInMB.toFixed(2)}MB)`, {
+              duration: 5000
+            })
+            processedFile = await compressImage(file)
+            const compressedSizeInMB = processedFile.size / 1024 / 1024
+            toast.success(`✓ Compressed to ${compressedSizeInMB.toFixed(2)}MB`)
+          } else {
+            // For documents, we can't compress them the same way
+            toast.warning(`Large file: ${file.name} (${fileSizeInMB.toFixed(2)}MB) - Upload may take longer`)
+          }
         }
         
         const url = URL.createObjectURL(processedFile)
-        newImages.push({ url, publicId: '', file: processedFile })
+        newImages.push({ 
+          url, 
+          publicId: '', 
+          file: processedFile,
+          fileType: isImage ? 'image' : 'document',
+          fileName: file.name,
+          fileSize: processedFile.size
+        })
+      } else {
+        toast.error(`Unsupported file type: ${file.name}`)
       }
     }
     
     setImages([...images, ...newImages] as ConcernImage[])
     setIsCompressing(false)
+    setCompressingFileName('')
     
     if (files.length + images.length > 5) {
-      toast.warning('Maximum 5 images allowed')
+      toast.warning('Maximum 5 files allowed')
     }
   }
 
@@ -289,11 +321,23 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                 </div>
 
                 <div className="space-y-2" onPaste={handlePaste}>
-                  <Label>Action Photos (Optional - Max 5, Ctrl+V to paste)</Label>
+                  <Label>Action Files (Optional - Max 5, Images/Documents)</Label>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {images.map((image, index) => (
                       <Card key={index} className="relative p-2">
-                        <img src={image.url} alt={`Action ${index + 1}`} className="w-full h-24 object-cover rounded" />
+                        {image.fileType === 'document' ? (
+                          <div className="w-full h-24 flex flex-col items-center justify-center bg-muted rounded">
+                            <HugeiconsIcon icon={File02Icon} className="w-8 h-8 text-blue-600" />
+                            <p className="text-[10px] text-center mt-1 px-1 truncate w-full">
+                              {image.fileName || 'Document'}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground">
+                              {((image.fileSize || 0) / 1024 / 1024).toFixed(2)}MB
+                            </p>
+                          </div>
+                        ) : (
+                          <img src={image.url} alt={`Action ${index + 1}`} className="w-full h-24 object-cover rounded" />
+                        )}
                         <Button
                           type="button"
                           variant="destructive"
@@ -313,8 +357,8 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                         onClick={() => fileInputRef.current?.click()}
                       >
                         <div className="text-center">
-                          <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 mx-auto text-muted-foreground" />
-                          <p className="text-xs text-muted-foreground mt-1">Add Photo</p>
+                          <HugeiconsIcon icon={FileAttachmentIcon} className="w-8 h-8 mx-auto text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground mt-1">Add File</p>
                         </div>
                       </Card>
                     )}
@@ -322,15 +366,41 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
                     multiple
                     className="hidden"
                     onChange={(e) => handleFileSelect(e.target.files)}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isCompressing}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Photos are optional - you can submit action notes now and add photos later
+                    Files are optional - Supports images and documents (PDF, Word, Excel, Text). Files &gt; 3MB will be compressed.
                   </p>
+                  
+                  {/* Compression Loading Animation */}
+                  <AnimatePresence>
+                    {isCompressing && compressingFileName && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800"
+                      >
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                            Compressing file...
+                          </p>
+                          <p className="text-xs text-blue-700 dark:text-blue-300 truncate">
+                            {compressingFileName}
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <div className="space-y-2">

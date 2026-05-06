@@ -273,12 +273,34 @@ export default function OneBAC() {
         return (
           <div className="flex gap-1">
             {actionTaken.photos.slice(0, 2).map((photo, index) => (
-              <LazyImage
-                key={index}
-                src={photo.url}
-                alt={`Action ${index + 1}`}
-                className="w-10 h-10 object-cover rounded border"
-              />
+              photo.fileType === 'document' ? (
+                <a
+                  key={index}
+                  href={photo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
+                  title={photo.fileName || 'Document'}
+                >
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </a>
+              ) : (
+                <a
+                  key={index}
+                  href={photo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <LazyImage
+                    src={photo.url}
+                    alt={`Action ${index + 1}`}
+                    className="w-10 h-10 object-cover rounded border hover:opacity-80 transition-opacity cursor-pointer"
+                  />
+                </a>
+              )
             ))}
             {actionTaken.photos.length > 2 && (
               <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">

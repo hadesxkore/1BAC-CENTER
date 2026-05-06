@@ -320,8 +320,9 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         updatedAt: serverTimestamp(),
       }
       
-      // Update action taken if there are action photos or notes
+      // Update or remove action taken
       if (uploadedActionPhotos.length > 0 || actionNotes.trim()) {
+        // User has action data - update it
         updateData.actionTaken = {
           photos: uploadedActionPhotos,
           notes: actionNotes.trim(),
@@ -330,6 +331,12 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         }
         // Update action date
         updateData.actionDate = skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : null)
+        // Keep status as is (could be in-progress or completed)
+      } else if (concern.actionTaken) {
+        // User removed all action data - explicitly remove it and set status to pending
+        updateData.actionTaken = null
+        updateData.actionDate = null
+        updateData.status = 'pending'
       }
       
       // Update Firestore

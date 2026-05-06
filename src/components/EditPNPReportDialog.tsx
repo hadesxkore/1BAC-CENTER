@@ -251,17 +251,19 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
         updatedAt: serverTimestamp(),
       }
       
-      // Only update afterPhotos if there are photos
-      if (uploadedAfterPhotos.length > 0) {
+      // Update or remove afterPhotos
+      if (uploadedAfterPhotos.length > 0 || afterNotes.trim()) {
+        // User has after data - update it
         updateData.afterPhotos = {
           photos: uploadedAfterPhotos,
-          notes: afterNotes.trim() || report.afterPhotos?.notes || '',
+          notes: afterNotes.trim(),
           actionDate: actionDate ? format(actionDate, 'yyyy-MM-dd') : (report.afterPhotos?.actionDate || new Date().toISOString().split('T')[0]),
           submittedBy: report.afterPhotos?.submittedBy || 'Unknown',
           submittedAt: report.afterPhotos?.submittedAt || new Date().toISOString(),
         }
         updateData.status = 'completed'
-      } else {
+      } else if (report.afterPhotos) {
+        // User removed all after data - explicitly remove it
         updateData.afterPhotos = null
         updateData.status = 'pending'
       }

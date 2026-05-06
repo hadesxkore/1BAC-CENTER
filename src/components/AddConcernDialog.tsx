@@ -175,11 +175,21 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
       // Prepare files for parallel upload
       const files = images.map(img => img.file!).filter(Boolean)
       
-      toast.info(`Compressing and uploading ${totalImages} images...`)
-      
-      // Upload images in parallel (compression happens inside)
-      const results = await uploadMultipleToCloudinary(files, (completed, total) => {
-        setUploadProgress((completed / total) * 100)
+      // Upload images with progress tracking
+      const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
+        if (stage === 'compressing') {
+          const progress = (completed / total) * 50 // First 50% for compression
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Compressing ${totalImages} images...`)
+          }
+        } else {
+          const progress = 50 + (completed / total) * 50 // Last 50% for upload
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Uploading ${totalImages} images...`)
+          }
+        }
       })
       
       // Check if all uploads were successful

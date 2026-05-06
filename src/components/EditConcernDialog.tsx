@@ -52,7 +52,14 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
   const [caseRemarks, setCaseRemarks] = useState(concern.caseRemarks)
   const [images, setImages] = useState<ConcernImage[]>(concern.concernPhotos)
   
+  // Action taken fields
+  const [actionPhotos, setActionPhotos] = useState<ConcernImage[]>(
+    concern.actionTaken?.photos || []
+  )
+  const [actionNotes, setActionNotes] = useState(concern.actionTaken?.notes || '')
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const actionFileInputRef = useRef<HTMLInputElement>(null)
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -65,6 +72,8 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       setLocation(concern.location)
       setCaseRemarks(concern.caseRemarks)
       setImages(concern.concernPhotos)
+      setActionPhotos(concern.actionTaken?.photos || [])
+      setActionNotes(concern.actionTaken?.notes || '')
     }
   }, [open, concern])
 
@@ -147,6 +156,47 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     setImages(images.filter((_, i) => i !== index))
   }
 
+  const handleActionFileSelect = async (files: FileList | null) => {
+    if (!files) return
+    
+    setIsCompressing(true)
+    const newImages: (ConcernImage & { file?: File })[] = []
+    
+    for (let i = 0; i < Math.min(files.length, 5 - actionPhotos.length); i++) {
+      const file = files[i]
+      if (file.type.startsWith('image/')) {
+        const fileSizeInMB = file.size / 1024 / 1024
+        let processedFile = file
+        
+        if (fileSizeInMB > 1.5) {
+          toast.info(`Compressing ${file.name}...`)
+          processedFile = await compressImage(file)
+          const compressedSizeInMB = processedFile.size / 1024 / 1024
+          toast.success(`Compressed from ${fileSizeInMB.toFixed(2)}MB to ${compressedSizeInMB.toFixed(2)}MB`)
+        }
+        
+        const url = URL.createObjectURL(processedFile)
+        newImages.push({ url, publicId: '', file: processedFile })
+      }
+    }
+    
+    setActionPhotos([...actionPhotos, ...newImages] as ConcernImage[])
+    setIsCompressing(false)
+    
+    if (files.length + actionPhotos.length > 5) {
+      toast.warning('Maximum 5 action photos allowed')
+    }
+  }
+
+  const removeActionPhoto = (index: number) => {
+    const imageToRemove = actionPhotos[index]
+    // Clean up object URL to prevent memory leak
+    if (imageToRemove.url.startsWith('blob:')) {
+      URL.revokeObjectURL(imageToRemove.url)
+    }
+    setActionPhotos(actionPhotos.filter((_, i) => i !== index))
+  }
+
   // Cleanup object URLs when component unmounts
   useEffect(() => {
     return () => {
@@ -156,8 +206,13 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           URL.revokeObjectURL(image.url)
         }
       })
+      actionPhotos.forEach(image => {
+        if (image.url.startsWith('blob:')) {
+          URL.revokeObjectURL(image.url)
+        }
+      })
     }
-  }, [images])
+  }, [images, actionPhotos])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -171,7 +226,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     setUploadProgress(0)
     
     try {
-      // Upload new images to Cloudinary
+      // Upload new concern images to Cloudinary
       const uploadedImages: { url: string; publicId: string }[] = []
       const newImagesToUpload = images.filter(img => (img as ConcernImage & { file?: File }).file)
       const existingImages = images.filter(img => !(img as ConcernImage & { file?: File }).file)
@@ -179,7 +234,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       // Add existing images
       uploadedImages.push(...existingImages)
       
-      // Upload new images
+      // Upload new concern images
       if (newImagesToUpload.length > 0) {
         const totalImages = newImagesToUpload.length
         
@@ -187,24 +242,54 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           const image = newImagesToUpload[i]
           const file = (image as ConcernImage & { file?: File }).file
           if (file) {
-            toast.info(`Uploading image ${i + 1} of ${totalImages}...`)
+            toast.info(`Uploading concern image ${i + 1} of ${totalImages}...`)
             const result = await uploadToCloudinary(file)
             if (result.success) {
               uploadedImages.push({
                 url: result.url!,
                 publicId: result.publicId!,
               })
-              setUploadProgress(((i + 1) / totalImages) * 100)
+              setUploadProgress(((i + 1) / totalImages) * 50) // First 50% for concern images
             } else {
-              throw new Error(`Failed to upload image ${i + 1}`)
+              throw new Error(`Failed to upload concern image ${i + 1}`)
             }
           }
         }
       }
       
-      // Update Firestore
-      const concernRef = doc(db, collectionName, concern.id)
-      await updateDoc(concernRef, {
+      // Upload new action photos to Cloudinary
+      const uploadedActionPhotos: { url: string; publicId: string }[] = []
+      const newActionPhotosToUpload = actionPhotos.filter(img => (img as ConcernImage & { file?: File }).file)
+      const existingActionPhotos = actionPhotos.filter(img => !(img as ConcernImage & { file?: File }).file)
+      
+      // Add existing action photos
+      uploadedActionPhotos.push(...existingActionPhotos)
+      
+      // Upload new action photos
+      if (newActionPhotosToUpload.length > 0) {
+        const totalActionPhotos = newActionPhotosToUpload.length
+        
+        for (let i = 0; i < newActionPhotosToUpload.length; i++) {
+          const image = newActionPhotosToUpload[i]
+          const file = (image as ConcernImage & { file?: File }).file
+          if (file) {
+            toast.info(`Uploading action photo ${i + 1} of ${totalActionPhotos}...`)
+            const result = await uploadToCloudinary(file)
+            if (result.success) {
+              uploadedActionPhotos.push({
+                url: result.url!,
+                publicId: result.publicId!,
+              })
+              setUploadProgress(50 + ((i + 1) / totalActionPhotos) * 50) // Last 50% for action photos
+            } else {
+              throw new Error(`Failed to upload action photo ${i + 1}`)
+            }
+          }
+        }
+      }
+      
+      // Prepare update data
+      const updateData: any = {
         dateReported,
         municipality,
         category,
@@ -214,7 +299,21 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         caseRemarks,
         concernPhotos: uploadedImages,
         updatedAt: serverTimestamp(),
-      })
+      }
+      
+      // Update action taken if there are action photos or notes
+      if (uploadedActionPhotos.length > 0 || actionNotes.trim()) {
+        updateData.actionTaken = {
+          photos: uploadedActionPhotos,
+          notes: actionNotes.trim(),
+          submittedBy: concern.actionTaken?.submittedBy || 'Unknown',
+          submittedAt: concern.actionTaken?.submittedAt || new Date().toISOString(),
+        }
+      }
+      
+      // Update Firestore
+      const concernRef = doc(db, collectionName, concern.id)
+      await updateDoc(concernRef, updateData)
       
       toast.success('Concern Updated Successfully!', {
         description: 'Your changes have been saved',
@@ -407,6 +506,72 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                     Click to upload or paste images (Ctrl+V)
                   </p>
                 </div>
+
+                {/* Action Taken Photos Section */}
+                {concern.actionTaken && (
+                  <>
+                    <div className="border-t pt-6">
+                      <h3 className="text-lg font-semibold mb-4">Action Taken</h3>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Action Photos (Max 5)</Label>
+                      <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                        {actionPhotos.map((image, index) => (
+                          <Card key={index} className="relative p-2">
+                            <img src={image.url} alt={`Action ${index + 1}`} className="w-full h-24 object-cover rounded" />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon-xs"
+                              className="absolute top-1 right-1"
+                              onClick={() => removeActionPhoto(index)}
+                              disabled={isSubmitting}
+                            >
+                              <HugeiconsIcon icon={Delete02Icon} className="w-3 h-3" />
+                            </Button>
+                          </Card>
+                        ))}
+                        
+                        {actionPhotos.length < 5 && (
+                          <Card
+                            className="p-2 h-28 flex items-center justify-center cursor-pointer hover:bg-muted transition-colors"
+                            onClick={() => actionFileInputRef.current?.click()}
+                          >
+                            <div className="text-center">
+                              <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 mx-auto text-muted-foreground" />
+                              <p className="text-xs text-muted-foreground mt-1">Add Photo</p>
+                            </div>
+                          </Card>
+                        )}
+                      </div>
+                      <input
+                        ref={actionFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => handleActionFileSelect(e.target.files)}
+                        disabled={isSubmitting}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Click to add, remove, or replace action photos
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="actionNotes">Action Notes</Label>
+                      <Textarea
+                        id="actionNotes"
+                        placeholder="Update action notes..."
+                        value={actionNotes}
+                        onChange={(e) => setActionNotes(e.target.value)}
+                        disabled={isSubmitting}
+                        rows={4}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="flex gap-2 pt-4 border-t">
                   <Button type="submit" disabled={isSubmitting || isCompressing} className="flex-1">

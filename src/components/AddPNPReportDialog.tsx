@@ -172,12 +172,21 @@ export function AddPNPReportDialog() {
       const beforeFiles = beforePhotos.map(photo => photo.file!).filter(Boolean)
       const afterFiles = afterPhotos.map(photo => photo.file!).filter(Boolean)
 
-      toast.info(`Uploading ${totalImages} images in parallel...`)
-
-      // Upload before photos in parallel
-      const beforeResults = await uploadMultipleToCloudinary(beforeFiles, (completed, total) => {
-        completedUploads = completed
-        setUploadProgress((completedUploads / totalImages) * 100)
+      // Upload before photos with progress tracking
+      const beforeResults = await uploadMultipleToCloudinary(beforeFiles, (completed, total, stage) => {
+        if (stage === 'compressing') {
+          const progress = (completed / totalImages) * 50
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Compressing before photos...`)
+          }
+        } else {
+          const progress = 50 + (completed / totalImages) * 50
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Uploading before photos...`)
+          }
+        }
       })
 
       // Check if all before photos uploaded successfully
@@ -195,9 +204,21 @@ export function AddPNPReportDialog() {
       let uploadedAfterPhotos: { url: string; publicId: string }[] = []
       
       if (afterFiles.length > 0) {
-        const afterResults = await uploadMultipleToCloudinary(afterFiles, (completed, total) => {
-          completedUploads = beforeFiles.length + completed
-          setUploadProgress((completedUploads / totalImages) * 100)
+        const afterResults = await uploadMultipleToCloudinary(afterFiles, (completed, total, stage) => {
+          const baseProgress = (beforeFiles.length / totalImages) * 100
+          if (stage === 'compressing') {
+            const progress = baseProgress + (completed / totalImages) * 50
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Compressing after photos...`)
+            }
+          } else {
+            const progress = baseProgress + 50 + (completed / totalImages) * 50
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Uploading after photos...`)
+            }
+          }
         })
 
         // Check if all after photos uploaded successfully

@@ -16,7 +16,7 @@ import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, query, getDocs, orderBy, limit } from 'firebase/firestore'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -30,17 +30,6 @@ const CONCERN_TYPES = [
   'Utilities',
   'Community Services',
   'Others',
-]
-
-const REPORT_TITLE_SUGGESTIONS = [
-  'PUBLIC CONSUMPTION OF ALCOHOLIC BEVERAGES',
-  'CURFEW VIOLATIONS',
-  'STRAY DOGS',
-  'SMOKING IN PUBLIC AREA',
-  'NO BARANGAY TANOD ON DUTY',
-  'IMPROPER GARBAGE DISPOSAL',
-  'BUSTED STREET LIGHTS',
-  'ROAD OBSTRUCTIONS',
 ]
 
 interface ConcernImage {
@@ -60,6 +49,9 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
   const [isCompressing, setIsCompressing] = useState(false)
   const { user } = useAppStore()
   
+  // Load existing report titles from Firestore
+  const [savedTitles, setSavedTitles] = useState<string[]>([])
+  
   // Form fields
   const [dateReported, setDateReported] = useState<Date | undefined>(undefined)
   const [municipality, setMunicipality] = useState('')
@@ -71,6 +63,38 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
   const [images, setImages] = useState<ConcernImage[]>([])
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load existing report titles from Firestore when dialog opens
+  useEffect(() => {
+    if (open) {
+      loadReportTitles()
+    }
+  }, [open])
+
+  const loadReportTitles = async () => {
+    try {
+      const q = query(
+        collection(db, collectionName),
+        orderBy('createdAt', 'desc'),
+        limit(100) // Get last 100 reports
+      )
+      const snapshot = await getDocs(q)
+      
+      // Extract unique report titles
+      const titles = new Set<string>()
+      snapshot.docs.forEach(doc => {
+        const title = doc.data().reportTitle
+        if (title && title.trim()) {
+          titles.add(title.trim())
+        }
+      })
+      
+      setSavedTitles(Array.from(titles))
+    } catch (error) {
+      console.error('Error loading report titles:', error)
+      // Silently fail - not critical
+    }
+  }
 
   // Auto-assign based on municipality
   const handleMunicipalityChange = (value: string) => {
@@ -161,11 +185,21 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
       // Prepare files for parallel upload
       const files = images.map(img => img.file!).filter(Boolean)
       
-      toast.info(`Compressing and uploading ${totalImages} images...`)
-      
-      // Upload images in parallel (compression happens inside)
-      const results = await uploadMultipleToCloudinary(files, (completed, total) => {
-        setUploadProgress((completed / total) * 100)
+      // Upload images with progress tracking
+      const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
+        if (stage === 'compressing') {
+          const progress = (completed / total) * 50 // First 50% for compression
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Compressing ${totalImages} images...`)
+          }
+        } else {
+          const progress = 50 + (completed / total) * 50 // Last 50% for upload
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Uploading ${totalImages} images...`)
+          }
+        }
       })
       
       // Check if all uploads were successful
@@ -311,14 +345,14 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
                   <Autocomplete
                     value={reportTitle}
                     onValueChange={setReportTitle}
-                    options={REPORT_TITLE_SUGGESTIONS}
-                    placeholder="Select or type report title..."
-                    searchPlaceholder="Search or type custom title..."
-                    emptyText="No suggestions found. Type your custom title."
+                    options={savedTitles}
+                    placeholder="Type report title..."
+                    searchPlaceholder="Search previous titles or type new one..."
+                    emptyText="No previous titles. Type your custom title."
                     disabled={isSubmitting}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Select from suggestions or type your own custom title
+                    Suggestions are based on previously entered titles
                   </p>
                 </div>
 
@@ -423,7 +457,11 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
                     >
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          {uploadProgress < 100 ? 'Uploading images...' : 'Saving to database...'}
+                          {uploadProgress < 50 
+                            ? 'Compressing images...' 
+                            : uploadProgress < 100 
+                            ? 'Uploading to cloud...' 
+                            : 'Saving to database...'}
                         </span>
                         <span className="font-medium">{Math.round(uploadProgress)}%</span>
                       </div>

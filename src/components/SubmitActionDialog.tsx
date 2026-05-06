@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
@@ -34,6 +35,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [notes, setNotes] = useState('')
   const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
   const [actionStatus, setActionStatus] = useState<'in-progress' | 'completed'>('completed')
+  const [skipActionDate, setSkipActionDate] = useState(false)
   const [images, setImages] = useState<ConcernImage[]>([])
   const { user } = useAppStore()
   
@@ -125,8 +127,8 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       return
     }
 
-    if (!actionDate) {
-      toast.error('Please select action date')
+    if (!skipActionDate && !actionDate) {
+      toast.error('Please select action date or check "No specific date"')
       return
     }
     
@@ -139,11 +141,21 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       // Prepare files for parallel upload
       const files = images.map(img => (img as ConcernImage & { file?: File }).file!).filter(Boolean)
       
-      toast.info(`Uploading ${totalImages} images in parallel...`)
-      
-      // Upload images in parallel
-      const results = await uploadMultipleToCloudinary(files, (completed, total) => {
-        setUploadProgress((completed / total) * 100)
+      // Upload images with progress tracking
+      const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
+        if (stage === 'compressing') {
+          const progress = (completed / total) * 50
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Compressing ${totalImages} images...`)
+          }
+        } else {
+          const progress = 50 + (completed / total) * 50
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Uploading ${totalImages} images...`)
+          }
+        }
       })
       
       // Check if all uploads were successful
@@ -169,7 +181,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       const concernRef = doc(db, collectionName, concernId)
       await updateDoc(concernRef, {
         actionTaken: actionTakenData,
-        actionDate: format(actionDate, 'yyyy-MM-dd'), // Use selected date
+        actionDate: skipActionDate ? 'Ongoing' : format(actionDate!, 'yyyy-MM-dd'),
         status: actionStatus,
         updatedAt: serverTimestamp(),
       })
@@ -186,6 +198,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       // Reset form
       setNotes('')
       setActionDate(undefined)
+      setSkipActionDate(false)
       setImages([])
       setUploadProgress(0)
       setOpen(false)
@@ -221,16 +234,35 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="actionDate">Action Date *</Label>
+                    <Label htmlFor="actionDate">Action Date {!skipActionDate && '*'}</Label>
                     <DatePicker
                       date={actionDate}
                       onDateChange={setActionDate}
                       placeholder="Select action date"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || skipActionDate}
                       maxDate={new Date()}
                     />
+                    <div className="flex items-center space-x-2 mt-2">
+                      <Checkbox 
+                        id="skipDate" 
+                        checked={skipActionDate}
+                        onCheckedChange={(checked) => {
+                          setSkipActionDate(checked as boolean)
+                          if (checked) setActionDate(undefined)
+                        }}
+                        disabled={isSubmitting}
+                      />
+                      <label
+                        htmlFor="skipDate"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        No specific date (Ongoing)
+                      </label>
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      Select the date when the action was taken
+                      {skipActionDate 
+                        ? 'Action date will be marked as "Ongoing"' 
+                        : 'Select the date when the action was taken'}
                     </p>
                   </div>
 

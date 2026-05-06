@@ -137,11 +137,21 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
       // Prepare files for parallel upload
       const files = afterPhotos.map(photo => photo.file!).filter(Boolean)
       
-      toast.info(`Uploading ${totalImages} images in parallel...`)
-      
-      // Upload after photos in parallel
-      const results = await uploadMultipleToCloudinary(files, (completed, total) => {
-        setUploadProgress((completed / total) * 100)
+      // Upload after photos with progress tracking
+      const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
+        if (stage === 'compressing') {
+          const progress = (completed / total) * 50
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Compressing ${totalImages} images...`)
+          }
+        } else {
+          const progress = 50 + (completed / total) * 50
+          setUploadProgress(progress)
+          if (completed === 0) {
+            toast.info(`Uploading ${totalImages} images...`)
+          }
+        }
       })
       
       // Check if all uploads were successful

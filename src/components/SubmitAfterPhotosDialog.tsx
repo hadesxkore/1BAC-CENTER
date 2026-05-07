@@ -218,9 +218,9 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <form onSubmit={handleSubmit} className="px-6 py-6">
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+          <ScrollArea className="flex-1 overflow-y-auto">
+            <div className="px-6 py-6">
               <div className="space-y-6">
                 <div className="space-y-2" onPaste={handlePaste}>
                   <Label>After Photos * (Max 5, Ctrl+V to paste)</Label>
@@ -293,57 +293,62 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
                     rows={5}
                   />
                 </div>
-
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button type="submit" disabled={isSubmitting || isCompressing} className="flex-1 bg-green-600 hover:bg-green-700">
-                    {isSubmitting ? (
-                      <div className="flex items-center gap-2">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
-                        />
-                        <span>Uploading...</span>
-                      </div>
-                    ) : isCompressing ? (
-                      <div className="flex items-center gap-2">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
-                        />
-                        <span>Compressing...</span>
-                      </div>
-                    ) : (
-                      'Submit & Complete'
-                    )}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting || isCompressing}>
-                    Cancel
-                  </Button>
-                </div>
-
-                {/* Upload Progress */}
-                <AnimatePresence>
-                  {isSubmitting && uploadProgress > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-2"
-                    >
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Uploading images...</span>
-                        <span className="font-medium">{Math.round(uploadProgress)}%</span>
-                      </div>
-                      <Progress value={uploadProgress} className="h-2" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
-            </form>
+            </div>
           </ScrollArea>
+
+        {/* Buttons - Fixed at bottom, outside ScrollArea */}
+        <div className="px-6 py-4 border-t bg-background">
+          <div className="space-y-4">
+            {/* Upload Progress */}
+            <AnimatePresence>
+              {isSubmitting && uploadProgress > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Uploading images...</span>
+                    <span className="font-medium">{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="flex gap-2">
+              <Button type="submit" disabled={isSubmitting || isCompressing} className="flex-1 bg-green-600 hover:bg-green-700">
+                {isSubmitting ? (
+                  <div className="flex items-center gap-2">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
+                    />
+                    <span>Uploading...</span>
+                  </div>
+                ) : isCompressing ? (
+                  <div className="flex items-center gap-2">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
+                    />
+                    <span>Compressing...</span>
+                  </div>
+                ) : (
+                  'Submit & Complete'
+                )}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting || isCompressing}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         </div>
+      </form>
       </DialogContent>
     </Dialog>
   )

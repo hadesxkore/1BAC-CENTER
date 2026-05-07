@@ -54,7 +54,8 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       
       // Check if it's an image or document
       const isImage = file.type.startsWith('image/')
-      const isDocument = file.type.includes('pdf') || 
+      const isPDF = file.type === 'application/pdf'
+      const isDocument = isPDF || 
                         file.type.includes('document') || 
                         file.type.includes('word') ||
                         file.type.includes('sheet') ||
@@ -65,22 +66,37 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       if (isImage || isDocument) {
         let processedFile = file
         
-        // Compress if file is larger than 3MB
-        if (fileSizeInMB > 3) {
+        // Compress images if larger than 3MB
+        if (isImage && fileSizeInMB > 3) {
           setCompressingFileName(file.name)
-          
-          if (isImage) {
-            // Compress image
-            toast.info(`Compressing ${file.name}... (${fileSizeInMB.toFixed(2)}MB)`, {
-              duration: 5000
-            })
-            processedFile = await compressImage(file)
-            const compressedSizeInMB = processedFile.size / 1024 / 1024
-            toast.success(`✓ Compressed to ${compressedSizeInMB.toFixed(2)}MB`)
-          } else {
-            // For documents, inform user they'll be stored locally
-            toast.info(`Document added: ${file.name} (${fileSizeInMB.toFixed(2)}MB) - Will be stored in browser`)
-          }
+          toast.info(`Compressing ${file.name}... (${fileSizeInMB.toFixed(2)}MB)`, {
+            duration: 5000
+          })
+          processedFile = await compressImage(file)
+          const compressedSizeInMB = processedFile.size / 1024 / 1024
+          toast.success(`✓ Compressed to ${compressedSizeInMB.toFixed(2)}MB`)
+        }
+        // PDFs: Strict 2MB limit (browser compression not effective for PDFs with images)
+        else if (isPDF && fileSizeInMB > 2) {
+          toast.error(
+            `PDF too large: ${file.name} (${fileSizeInMB.toFixed(2)}MB). Maximum size is 2MB.`,
+            {
+              duration: 10000,
+              description: 'Please compress your PDF using external tools first',
+              action: {
+                label: 'Compress PDF',
+                onClick: () => window.open('https://www.ilovepdf.com/compress_pdf', '_blank')
+              }
+            }
+          )
+          continue // Skip this file
+        }
+        // Reject other documents if larger than 2MB
+        else if (isDocument && !isPDF && fileSizeInMB > 2) {
+          toast.error(`Document too large: ${file.name} (${fileSizeInMB.toFixed(2)}MB). Maximum size is 2MB.`, {
+            duration: 5000
+          })
+          continue // Skip this file
         }
         
         const url = URL.createObjectURL(processedFile)
@@ -268,9 +284,9 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <form onSubmit={handleSubmit} className="px-6 py-6">
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+          <ScrollArea className="flex-1 overflow-y-auto">
+            <div className="px-6 py-6">
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -376,7 +392,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                     disabled={isSubmitting || isCompressing}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Files are optional - Supports images and documents (PDF, Word, Excel, Text). Files &gt; 3MB will be compressed.
+                    Files are optional - Supports images and documents (PDF, Word, Excel, Text). Images &gt; 3MB will be compressed. PDFs must be under 2MB (use iLovePDF if needed).
                   </p>
                   
                   {/* Compression Loading Animation */}
@@ -418,57 +434,62 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                     rows={5}
                   />
                 </div>
-
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button type="submit" disabled={isSubmitting || isCompressing} className="flex-1">
-                    {isSubmitting ? (
-                      <div className="flex items-center gap-2">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
-                        />
-                        <span>Uploading...</span>
-                      </div>
-                    ) : isCompressing ? (
-                      <div className="flex items-center gap-2">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
-                        />
-                        <span>Compressing...</span>
-                      </div>
-                    ) : (
-                      'Submit Action'
-                    )}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting || isCompressing}>
-                    Cancel
-                  </Button>
-                </div>
-
-                {/* Upload Progress */}
-                <AnimatePresence>
-                  {isSubmitting && uploadProgress > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-2"
-                    >
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Uploading images...</span>
-                        <span className="font-medium">{Math.round(uploadProgress)}%</span>
-                      </div>
-                      <Progress value={uploadProgress} className="h-2" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
-            </form>
+            </div>
           </ScrollArea>
+
+        {/* Buttons - Fixed at bottom, outside ScrollArea */}
+        <div className="px-6 py-4 border-t bg-background">
+          <div className="space-y-4">
+            {/* Upload Progress */}
+            <AnimatePresence>
+              {isSubmitting && uploadProgress > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Uploading images...</span>
+                    <span className="font-medium">{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="flex gap-2">
+              <Button type="submit" disabled={isSubmitting || isCompressing} className="flex-1">
+                {isSubmitting ? (
+                  <div className="flex items-center gap-2">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
+                    />
+                    <span>Uploading...</span>
+                  </div>
+                ) : isCompressing ? (
+                  <div className="flex items-center gap-2">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
+                    />
+                    <span>Compressing...</span>
+                  </div>
+                ) : (
+                  'Submit Action'
+                )}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting || isCompressing}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         </div>
+      </form>
       </DialogContent>
     </Dialog>
   )

@@ -149,7 +149,15 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
     if (imageToRemove.url.startsWith('blob:')) {
       URL.revokeObjectURL(imageToRemove.url)
     }
-    setPhotos(photos.filter((_, i) => i !== index))
+    const newPhotos = photos.filter((_, i) => i !== index)
+    setPhotos(newPhotos)
+    
+    // If removing the last after photo, also clear after notes and action date
+    if (type === 'after' && newPhotos.length === 0) {
+      setAfterNotes('')
+      setActionDate(undefined)
+      toast.info('All after photos cleared - status will be set to pending')
+    }
   }
 
   // Cleanup object URLs when component unmounts
@@ -251,8 +259,11 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
         updatedAt: serverTimestamp(),
       }
       
+      // Check if user has any after data
+      const hasAfterData = uploadedAfterPhotos.length > 0 || afterNotes.trim().length > 0
+      
       // Update or remove afterPhotos
-      if (uploadedAfterPhotos.length > 0 || afterNotes.trim()) {
+      if (hasAfterData) {
         // User has after data - update it
         updateData.afterPhotos = {
           photos: uploadedAfterPhotos,
@@ -262,8 +273,8 @@ export function EditPNPReportDialog({ report }: EditPNPReportDialogProps) {
           submittedAt: report.afterPhotos?.submittedAt || new Date().toISOString(),
         }
         updateData.status = 'completed'
-      } else if (report.afterPhotos) {
-        // User removed all after data - explicitly remove it
+      } else {
+        // No after data - explicitly remove it and set status to pending
         updateData.afterPhotos = null
         updateData.status = 'pending'
       }

@@ -22,16 +22,6 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import type { ActionCategory } from '@/data/sampleActions'
 
-const CONCERN_TYPES = [
-  'Infrastructure',
-  'Public Safety',
-  'Health & Sanitation',
-  'Traffic & Transportation',
-  'Utilities',
-  'Community Services',
-  'Others',
-]
-
 interface ConcernImage {
   url: string
   publicId: string
@@ -59,8 +49,6 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
   // Form fields
   const [dateReported, setDateReported] = useState<Date | undefined>(undefined)
   const [municipality, setMunicipality] = useState('')
-  const [concernType, setConcernType] = useState('')
-  const [assignedTo, setAssignedTo] = useState('')
   const [reportTitle, setReportTitle] = useState('')
   const [location, setLocation] = useState('')
   const [caseRemarks, setCaseRemarks] = useState('')
@@ -103,8 +91,6 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
   // Auto-assign based on municipality
   const handleMunicipalityChange = (value: string) => {
     setMunicipality(value)
-    const municipalityName = value.replace(' City', '').toUpperCase()
-    setAssignedTo(`1BAC-${municipalityName}`)
   }
 
   const handleFileSelect = async (files: FileList | null) => {
@@ -265,8 +251,8 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
         dateReported: format(dateReported, 'yyyy-MM-dd'),
         dateUploaded: serverTimestamp(),
         municipality,
-        category: concernType, // Store concern type in category field
-        assignedTo,
+        category: '1BAC', // Default category for 1BAC concerns
+        assignedTo: `1BAC-${municipality.replace(' City', '').toUpperCase()}`, // Auto-generate from municipality
         reportTitle,
         location,
         caseRemarks,
@@ -289,8 +275,6 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
       // Reset form
       setDateReported(undefined)
       setMunicipality('')
-      setConcernType('')
-      setAssignedTo('')
       setReportTitle('')
       setLocation('')
       setCaseRemarks('')
@@ -355,34 +339,6 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="concernType">Concern Type *</Label>
-                    <Select value={concernType} onValueChange={setConcernType} disabled={isSubmitting}>
-                      <SelectTrigger id="concernType">
-                        <SelectValue placeholder="Select concern type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONCERN_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {municipality && (
-                    <div className="space-y-2">
-                      <Label htmlFor="assignedTo">Assigned To</Label>
-                      <Input
-                        id="assignedTo"
-                        value={assignedTo}
-                        disabled
-                        className="bg-muted"
-                      />
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-2">

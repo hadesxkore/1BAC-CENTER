@@ -260,7 +260,10 @@ export default function ActionCenter() {
       header: 'Action Taken',
       cell: ({ row }) => {
         const actionTaken = row.original.actionTaken
-        if (!actionTaken) {
+        const status = row.original.status
+        
+        // Show Submit Action button if no action taken OR status is pending
+        if (!actionTaken || status === 'pending') {
           return (
             <SubmitActionDialog
               concernId={row.original.id}
@@ -268,6 +271,7 @@ export default function ActionCenter() {
             />
           )
         }
+        
         return (
           <div className="flex gap-1">
             {actionTaken.photos.slice(0, 2).map((photo, index) => (

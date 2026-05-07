@@ -101,7 +101,6 @@ export default function OneBAC() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [municipalityFilter, setMunicipalityFilter] = useState<string>('all')
-  const [concernTypeFilter, setConcernTypeFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
   const [advancedSearch, setAdvancedSearch] = useState({
@@ -261,7 +260,10 @@ export default function OneBAC() {
       header: 'Action Taken',
       cell: ({ row }) => {
         const actionTaken = row.original.actionTaken
-        if (!actionTaken) {
+        const status = row.original.status
+        
+        // Show Submit Action button if no action taken OR status is pending
+        if (!actionTaken || status === 'pending') {
           return (
             <SubmitActionDialog
               concernId={row.original.id}
@@ -270,6 +272,7 @@ export default function OneBAC() {
             />
           )
         }
+        
         return (
           <div className="flex gap-1">
             {actionTaken.photos.slice(0, 2).map((photo, index) => (
@@ -393,9 +396,6 @@ export default function OneBAC() {
       // Municipality filter
       if (municipalityFilter !== 'all' && action.municipality !== municipalityFilter) return false
       
-      // Concern Type filter (stored in category field)
-      if (concernTypeFilter !== 'all' && action.category !== concernTypeFilter) return false
-      
       // Date range filter
       if (dateFrom || dateTo) {
         const actionDate = new Date(action.dateReported)
@@ -424,7 +424,7 @@ export default function OneBAC() {
       
       return true
     })
-  }, [concerns, statusFilter, municipalityFilter, concernTypeFilter, dateFrom, dateTo, advancedSearch])
+  }, [concerns, statusFilter, municipalityFilter, dateFrom, dateTo, advancedSearch])
 
   const table = useReactTable({
     data: filteredData,
@@ -708,7 +708,6 @@ export default function OneBAC() {
   const clearFilters = () => {
     setStatusFilter('all')
     setMunicipalityFilter('all')
-    setConcernTypeFilter('all')
     setDateFrom(undefined)
     setDateTo(undefined)
     setAdvancedSearch({ location: '', assignedTo: '', reportedBy: '' })
@@ -843,22 +842,6 @@ export default function OneBAC() {
                         {muni}
                       </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={concernTypeFilter} onValueChange={setConcernTypeFilter}>
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Concern Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="Infrastructure">Infrastructure</SelectItem>
-                    <SelectItem value="Public Safety">Public Safety</SelectItem>
-                    <SelectItem value="Health & Sanitation">Health & Sanitation</SelectItem>
-                    <SelectItem value="Traffic & Transportation">Traffic & Transportation</SelectItem>
-                    <SelectItem value="Utilities">Utilities</SelectItem>
-                    <SelectItem value="Community Services">Community Services</SelectItem>
-                    <SelectItem value="Others">Others</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

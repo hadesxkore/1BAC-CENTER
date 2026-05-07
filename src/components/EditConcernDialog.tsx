@@ -213,7 +213,16 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     if (imageToRemove.url.startsWith('blob:')) {
       URL.revokeObjectURL(imageToRemove.url)
     }
-    setActionPhotos(actionPhotos.filter((_, i) => i !== index))
+    const newActionPhotos = actionPhotos.filter((_, i) => i !== index)
+    setActionPhotos(newActionPhotos)
+    
+    // If removing the last photo, also clear action notes and date
+    if (newActionPhotos.length === 0) {
+      setActionNotes('')
+      setActionDate(undefined)
+      setSkipActionDate(false)
+      toast.info('All action data cleared - status will be set to pending')
+    }
   }
 
   // Cleanup object URLs when component unmounts
@@ -320,8 +329,22 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         updatedAt: serverTimestamp(),
       }
       
+      // Check if user has any action data (be very strict)
+      const hasActionPhotos = uploadedActionPhotos.length > 0
+      const hasActionNotes = actionNotes.trim().length > 0
+      const hasActionData = hasActionPhotos || hasActionNotes
+      
+      console.log('Edit Submit Debug:', {
+        hasActionPhotos,
+        hasActionNotes,
+        hasActionData,
+        uploadedActionPhotos,
+        actionNotes: `"${actionNotes}"`,
+        actionNotesTrimmed: `"${actionNotes.trim()}"`
+      })
+      
       // Update or remove action taken
-      if (uploadedActionPhotos.length > 0 || actionNotes.trim()) {
+      if (hasActionData) {
         // User has action data - update it
         updateData.actionTaken = {
           photos: uploadedActionPhotos,
@@ -331,13 +354,16 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         }
         // Update action date
         updateData.actionDate = skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : null)
-        // Keep status as is (could be in-progress or completed)
-      } else if (concern.actionTaken) {
-        // User removed all action data - explicitly remove it and set status to pending
+        console.log('Keeping action data, status unchanged')
+      } else {
+        // No action data - explicitly remove it and set status to pending
         updateData.actionTaken = null
         updateData.actionDate = null
         updateData.status = 'pending'
+        console.log('Removing action data, setting status to pending')
       }
+      
+      console.log('Update data being sent to Firestore:', updateData)
       
       // Update Firestore
       const concernRef = doc(db, collectionName, concern.id)

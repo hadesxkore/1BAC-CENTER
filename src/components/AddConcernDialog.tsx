@@ -16,7 +16,7 @@ import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, query, getDocs } from 'firebase/firestore'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -35,6 +35,7 @@ const REPORT_TITLE_SUGGESTIONS = [
   'ALLEGED ILLEGAL QUARRY',
   'ALLEGED ILLEGAL KAINGIN',
   'ALLEGED ILLEGAL ULING',
+  'ALLEGED ILLEGAL HAULING',
   'ALLEGED ILLEGAL CUTTING MAHOGANY',
   'ALLEGED ILLEGAL CUTTING NARRA TREE',
   'ALLEGED ILLEGAL CUTTING EUCALYPTUS',
@@ -60,6 +61,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isCompressing, setIsCompressing] = useState(false)
+  const [reportTitleSuggestions, setReportTitleSuggestions] = useState<string[]>(REPORT_TITLE_SUGGESTIONS)
   const { user } = useAppStore()
   
   // Form fields
@@ -73,6 +75,44 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   const [images, setImages] = useState<ConcernImage[]>([])
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load existing report titles from Firestore when dialog opens
+  useEffect(() => {
+    if (open) {
+      loadReportTitles()
+    }
+  }, [open, collectionName])
+
+  const loadReportTitles = async () => {
+    try {
+      const q = query(collection(db, collectionName))
+      const querySnapshot = await getDocs(q)
+      
+      // Extract unique report titles from existing concerns
+      const existingTitles = new Set<string>()
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        if (data.reportTitle && typeof data.reportTitle === 'string') {
+          existingTitles.add(data.reportTitle.trim().toUpperCase())
+        }
+      })
+      
+      // Combine default suggestions with existing titles (remove duplicates)
+      const allTitles = new Set([
+        ...REPORT_TITLE_SUGGESTIONS,
+        ...Array.from(existingTitles)
+      ])
+      
+      // Convert back to array and sort alphabetically
+      const sortedTitles = Array.from(allTitles).sort()
+      setReportTitleSuggestions(sortedTitles)
+      
+    } catch (error) {
+      console.error('Error loading report titles:', error)
+      // If loading fails, just use default suggestions
+      setReportTitleSuggestions(REPORT_TITLE_SUGGESTIONS)
+    }
+  }
 
   // Auto-assign based on category
   const handleCategoryChange = (value: ActionCategory) => {
@@ -350,14 +390,14 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
                   <Autocomplete
                     value={reportTitle}
                     onValueChange={setReportTitle}
-                    options={REPORT_TITLE_SUGGESTIONS}
+                    options={reportTitleSuggestions}
                     placeholder="Select or type report title..."
                     searchPlaceholder="Search or type custom title..."
                     emptyText="No suggestions found. Type your custom title."
                     disabled={isSubmitting}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Select from suggestions or type your own custom title
+                    Select from suggestions or type your own custom title (new titles will appear in future suggestions)
                   </p>
                 </div>
 

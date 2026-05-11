@@ -201,47 +201,47 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
       return
     }
     
-    if (images.length === 0) {
-      toast.error('Please upload at least one image')
-      return
-    }
-    
     setIsSubmitting(true)
     setUploadProgress(0)
     
     try {
-      const totalImages = images.length
+      let uploadedImages: { url: string; publicId: string }[] = []
       
-      // Prepare files for parallel upload
-      const files = images.map(img => img.file!).filter(Boolean)
-      
-      // Upload images with progress tracking
-      const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
-        if (stage === 'compressing') {
-          const progress = (completed / total) * 50 // First 50% for compression
-          setUploadProgress(progress)
-          if (completed === 0) {
-            toast.info(`Compressing ${totalImages} images...`)
+      // Only upload images if there are any
+      if (images.length > 0) {
+        const totalImages = images.length
+        
+        // Prepare files for parallel upload
+        const files = images.map(img => img.file!).filter(Boolean)
+        
+        // Upload images with progress tracking
+        const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
+          if (stage === 'compressing') {
+            const progress = (completed / total) * 50 // First 50% for compression
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Compressing ${totalImages} images...`)
+            }
+          } else {
+            const progress = 50 + (completed / total) * 50 // Last 50% for upload
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Uploading ${totalImages} images...`)
+            }
           }
-        } else {
-          const progress = 50 + (completed / total) * 50 // Last 50% for upload
-          setUploadProgress(progress)
-          if (completed === 0) {
-            toast.info(`Uploading ${totalImages} images...`)
-          }
+        })
+        
+        // Check if all uploads were successful
+        const failedUploads = results.filter(r => !r.success)
+        if (failedUploads.length > 0) {
+          throw new Error(`Failed to upload ${failedUploads.length} image(s)`)
         }
-      })
-      
-      // Check if all uploads were successful
-      const failedUploads = results.filter(r => !r.success)
-      if (failedUploads.length > 0) {
-        throw new Error(`Failed to upload ${failedUploads.length} image(s)`)
+        
+        uploadedImages = results.map(r => ({
+          url: r.url!,
+          publicId: r.publicId!,
+        }))
       }
-      
-      const uploadedImages = results.map(r => ({
-        url: r.url!,
-        publicId: r.publicId!,
-      }))
       
       toast.info('Saving to database...')
       
@@ -267,8 +267,12 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
       
       await addDoc(collection(db, collectionName), concernData)
       
+      const imageText = images.length > 0 
+        ? `Uploaded ${images.length} image(s) and saved report` 
+        : 'Report saved successfully'
+      
       toast.success('Concern Reported Successfully!', {
-        description: `Uploaded ${totalImages} images and saved report`,
+        description: imageText,
       })
       
       // Reset form
@@ -427,7 +431,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
                 </div>
 
                 <div className="space-y-2" onPaste={handlePaste}>
-                  <Label>Concern Images * (Max 5, Ctrl+V to paste)</Label>
+                  <Label>Concern Images (Optional - Max 5, Ctrl+V to paste)</Label>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {images.map((image, index) => (
                       <Card key={index} className="relative p-2">
@@ -467,7 +471,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
                     disabled={isSubmitting}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Click to upload or paste images (Ctrl+V)
+                    Images are optional - Click to upload or paste images (Ctrl+V)
                   </p>
                 </div>
 

@@ -6,16 +6,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Autocomplete } from '@/components/ui/autocomplete'
+import { Checkbox } from '@/components/ui/checkbox'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
-import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
+import { uploadMultipleToCloudinary } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { collection, addDoc, serverTimestamp, query, getDocs } from 'firebase/firestore'
 import { useAppStore } from '@/store'
@@ -62,8 +62,8 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [isCompressing, setIsCompressing] = useState(false)
   const [reportTitleSuggestions, setReportTitleSuggestions] = useState<string[]>(REPORT_TITLE_SUGGESTIONS)
+  const [showAssignedTo, setShowAssignedTo] = useState(false)
   const { user } = useAppStore()
   
   // Form fields
@@ -71,7 +71,6 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   const [municipality, setMunicipality] = useState('')
   const [category, setCategory] = useState<ActionCategory | ''>('')
   const [assignedTo, setAssignedTo] = useState('')
-  const [showAssignedTo, setShowAssignedTo] = useState(false)
   const [reportTitle, setReportTitle] = useState('')
   const [location, setLocation] = useState('')
   const [caseRemarks, setCaseRemarks] = useState('')
@@ -123,8 +122,13 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
     if (value === 'agricultural' && municipality) {
       const municipalityName = municipality.replace(' City', '').toUpperCase()
       setAssignedTo(`AGRI-${municipalityName}`)
+      setShowAssignedTo(true)
+    } else if (value === 'environmental') {
+      setAssignedTo('')
+      setShowAssignedTo(true)
     } else {
       setAssignedTo('')
+      setShowAssignedTo(false)
     }
   }
 
@@ -283,6 +287,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
       setMunicipality('')
       setCategory('')
       setAssignedTo('')
+      setShowAssignedTo(false)
       setReportTitle('')
       setLocation('')
       setCaseRemarks('')
@@ -361,47 +366,26 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
                     </Select>
                   </div>
 
-                  {category === 'environmental' && (
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox 
-                          id="showAssignedTo" 
-                          checked={showAssignedTo}
-                          onCheckedChange={(checked) => {
-                            setShowAssignedTo(checked as boolean)
-                            if (!checked) setAssignedTo('')
-                          }}
-                          disabled={isSubmitting}
-                        />
-                        <label
-                          htmlFor="showAssignedTo"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          Assign to specific officer (Optional)
-                        </label>
-                      </div>
-                      
-                      {showAssignedTo && (
-                        <div className="space-y-2">
-                          <Label htmlFor="assignedTo">Assign To</Label>
-                          <Select value={assignedTo} onValueChange={setAssignedTo} disabled={isSubmitting}>
-                            <SelectTrigger id="assignedTo">
-                              <SelectValue placeholder="Select officer" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ENVIRONMENTAL_OFFICERS.map((officer) => (
-                                <SelectItem key={officer} value={officer}>
-                                  {officer}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
+                  {/* Assigned To Field - stays in grid */}
+                  {showAssignedTo && category === 'environmental' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="assignedTo">Assign To</Label>
+                      <Select value={assignedTo} onValueChange={setAssignedTo} disabled={isSubmitting}>
+                        <SelectTrigger id="assignedTo">
+                          <SelectValue placeholder="Select officer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ENVIRONMENTAL_OFFICERS.map((officer) => (
+                            <SelectItem key={officer} value={officer}>
+                              {officer}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
 
-                  {category === 'agricultural' && municipality && (
+                  {showAssignedTo && category === 'agricultural' && municipality && (
                     <div className="space-y-2">
                       <Label htmlFor="assignedTo">Assigned To</Label>
                       <Input
@@ -413,6 +397,32 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
                     </div>
                   )}
                 </div>
+
+                {/* Assigned To Toggle - below grid */}
+                {category && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="showAssignedTo"
+                      checked={showAssignedTo}
+                      onCheckedChange={(checked) => {
+                        setShowAssignedTo(checked as boolean)
+                        if (!checked) {
+                          setAssignedTo('')
+                        } else if (category === 'agricultural' && municipality) {
+                          const municipalityName = municipality.replace(' City', '').toUpperCase()
+                          setAssignedTo(`AGRI-${municipalityName}`)
+                        }
+                      }}
+                      disabled={isSubmitting}
+                    />
+                    <Label
+                      htmlFor="showAssignedTo"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      Assign to specific officer (optional)
+                    </Label>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="reportTitle">Report Title *</Label>
@@ -547,6 +557,3 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
     </Dialog>
   )
 }
-
-
-

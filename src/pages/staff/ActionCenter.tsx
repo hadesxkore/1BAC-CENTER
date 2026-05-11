@@ -684,7 +684,23 @@ export default function ActionCenter() {
       doc.setFont('helvetica', 'bold')
       doc.text('Action Date:', col2X, yPosition)
       doc.setFont('helvetica', 'normal')
-      doc.text(item.actionDate ? format(new Date(item.actionDate), 'MMM dd, yyyy') : 'N/A', col2X + 30, yPosition)
+      // Handle action date - could be "Ongoing", null, or a valid date
+      let actionDateText = 'N/A'
+      if (item.actionDate) {
+        if (item.actionDate === 'Ongoing') {
+          actionDateText = 'Ongoing'
+        } else {
+          try {
+            const actionDate = new Date(item.actionDate)
+            if (!isNaN(actionDate.getTime())) {
+              actionDateText = format(actionDate, 'MMM dd, yyyy')
+            }
+          } catch (e) {
+            actionDateText = 'N/A'
+          }
+        }
+      }
+      doc.text(actionDateText, col2X + 30, yPosition)
 
       yPosition += lineHeight * 2
 

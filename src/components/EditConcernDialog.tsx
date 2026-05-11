@@ -53,6 +53,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
   const [municipality, setMunicipality] = useState(concern.municipality)
   const [category, setCategory] = useState<ActionCategory>(concern.category)
   const [assignedTo, setAssignedTo] = useState(concern.assignedTo)
+  const [showAssignedTo, setShowAssignedTo] = useState(!!concern.assignedTo)
   const [reportTitle, setReportTitle] = useState(concern.reportTitle)
   const [location, setLocation] = useState(concern.location)
   const [caseRemarks, setCaseRemarks] = useState(concern.caseRemarks)
@@ -80,6 +81,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       setMunicipality(concern.municipality)
       setCategory(concern.category)
       setAssignedTo(concern.assignedTo)
+      setShowAssignedTo(!!concern.assignedTo)
       setReportTitle(concern.reportTitle)
       setLocation(concern.location)
       setCaseRemarks(concern.caseRemarks)
@@ -102,8 +104,13 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     if (value === 'agricultural' && municipality) {
       const municipalityName = municipality.replace(' City', '').toUpperCase()
       setAssignedTo(`AGRI-${municipalityName}`)
+      setShowAssignedTo(true)
+    } else if (value === 'environmental') {
+      setAssignedTo('')
+      setShowAssignedTo(true)
     } else {
       setAssignedTo('')
+      setShowAssignedTo(false)
     }
   }
 
@@ -448,9 +455,10 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                     </Select>
                   </div>
 
-                  {category === 'environmental' && (
+                  {/* Assigned To Field - stays in grid */}
+                  {showAssignedTo && category === 'environmental' && (
                     <div className="space-y-2">
-                      <Label htmlFor="assignedTo">Assign To *</Label>
+                      <Label htmlFor="assignedTo">Assign To</Label>
                       <Select value={assignedTo} onValueChange={setAssignedTo} disabled={isSubmitting}>
                         <SelectTrigger id="assignedTo">
                           <SelectValue placeholder="Select officer" />
@@ -466,7 +474,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                     </div>
                   )}
 
-                  {category === 'agricultural' && municipality && (
+                  {showAssignedTo && category === 'agricultural' && municipality && (
                     <div className="space-y-2">
                       <Label htmlFor="assignedTo">Assigned To</Label>
                       <Input
@@ -478,6 +486,32 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                     </div>
                   )}
                 </div>
+
+                {/* Assigned To Toggle - below grid */}
+                {category && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="showAssignedTo"
+                      checked={showAssignedTo}
+                      onCheckedChange={(checked) => {
+                        setShowAssignedTo(checked as boolean)
+                        if (!checked) {
+                          setAssignedTo('')
+                        } else if (category === 'agricultural' && municipality) {
+                          const municipalityName = municipality.replace(' City', '').toUpperCase()
+                          setAssignedTo(`AGRI-${municipalityName}`)
+                        }
+                      }}
+                      disabled={isSubmitting}
+                    />
+                    <Label
+                      htmlFor="showAssignedTo"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      Assign to specific officer (optional)
+                    </Label>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="reportTitle">Report Title *</Label>

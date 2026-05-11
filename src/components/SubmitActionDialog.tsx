@@ -16,7 +16,7 @@ import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
 import type { ConcernImage } from '@/data/sampleActions'
 
@@ -340,7 +340,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                 </div>
 
                 <div className="space-y-2" onPaste={handlePaste}>
-                  <Label>Action Files (Optional - Max 5, Images/Documents)</Label>
+                  <Label>Action Files (Optional - Max 5, Images/Documents, Ctrl+V to paste)</Label>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {images.map((image, index) => (
                       <Card key={index} className="relative p-2">

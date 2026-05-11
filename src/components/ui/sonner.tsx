@@ -1,48 +1,43 @@
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { CheckmarkCircle02Icon, InformationCircleIcon, Alert02Icon, MultiplicationSignCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { sileo } from "sileo"
 
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
-  return (
-    <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
-      icons={{
-        success: (
-          <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} className="size-4" />
-        ),
-        info: (
-          <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} className="size-4" />
-        ),
-        warning: (
-          <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} className="size-4" />
-        ),
-        error: (
-          <HugeiconsIcon icon={MultiplicationSignCircleIcon} strokeWidth={2} className="size-4" />
-        ),
-        loading: (
-          <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-4 animate-spin" />
-        ),
-      }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
-      toastOptions={{
-        classNames: {
-          toast: "cn-toast",
-        },
-      }}
-      {...props}
-    />
-  )
+// Re-export sileo as toast for compatibility
+export const toast = {
+  success: (message: string, options?: { description?: string; duration?: number; action?: { label: string; onClick: () => void } }) => {
+    sileo.success({
+      title: message,
+      description: options?.description,
+      duration: options?.duration,
+      button: options?.action ? {
+        title: options.action.label,
+        onClick: options.action.onClick,
+      } : undefined,
+    })
+  },
+  error: (message: string, options?: { description?: string; duration?: number; action?: { label: string; onClick: () => void } }) => {
+    sileo.error({
+      title: message,
+      description: options?.description,
+      duration: options?.duration,
+      button: options?.action ? {
+        title: options.action.label,
+        onClick: options.action.onClick,
+      } : undefined,
+    })
+  },
+  info: (message: string, options?: { description?: string; duration?: number }) => {
+    sileo.info({
+      title: message,
+      description: options?.description,
+      duration: options?.duration,
+    })
+  },
+  warning: (message: string, options?: { description?: string; duration?: number }) => {
+    sileo.warning({
+      title: message,
+      description: options?.description,
+      duration: options?.duration,
+    })
+  },
 }
 
-export { Toaster }
+export { sileo }

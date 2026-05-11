@@ -63,7 +63,7 @@ import { DeletePNPReportDialog } from '@/components/DeletePNPReportDialog'
 import { SubmitAfterPhotosDialog } from '@/components/SubmitAfterPhotosDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 

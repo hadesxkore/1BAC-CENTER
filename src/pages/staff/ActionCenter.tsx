@@ -65,7 +65,7 @@ import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -111,6 +111,7 @@ export default function ActionCenter() {
   })
   const [concerns, setConcerns] = useState<Action[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   // Real-time listener for concerns
   useEffect(() => {
@@ -211,21 +212,90 @@ export default function ActionCenter() {
     {
       accessorKey: 'reportTitle',
       header: 'Report Title',
-      cell: ({ row }) => (
-        <div className="max-w-[250px]">
-          <div className="font-medium truncate">{row.getValue('reportTitle')}</div>
-          <div className="text-xs text-muted-foreground line-clamp-2">
-            {row.original.caseRemarks}
+      cell: ({ row }) => {
+        const isExpanded = expandedRows.has(row.original.id + '-title')
+        const title = row.getValue('reportTitle') as string
+        const remarks = row.original.caseRemarks
+        
+        // Check if text is long enough to be truncated
+        const isTitleLong = title.length > 60
+        const isRemarksLong = remarks && remarks.length > 40
+        
+        const toggleExpand = () => {
+          const newExpanded = new Set(expandedRows)
+          const key = row.original.id + '-title'
+          if (newExpanded.has(key)) {
+            newExpanded.delete(key)
+          } else {
+            newExpanded.add(key)
+          }
+          setExpandedRows(newExpanded)
+        }
+        
+        return (
+          <div className="max-w-[250px]">
+            <button
+              onClick={toggleExpand}
+              className="text-left w-full hover:bg-muted/50 rounded p-1 -m-1 transition-colors cursor-pointer"
+            >
+              <div className="font-medium text-xs">
+                <div className={isExpanded ? 'whitespace-normal' : 'line-clamp-2'}>
+                  {title}
+                </div>
+                {!isExpanded && isTitleLong && (
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">...</span>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <div className={isExpanded ? 'mt-1 whitespace-normal' : 'line-clamp-1'}>
+                  {remarks}
+                </div>
+                {!isExpanded && isRemarksLong && (
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">...</span>
+                )}
+              </div>
+            </button>
           </div>
-        </div>
-      ),
+        )
+      },
     },
     {
       accessorKey: 'location',
       header: 'Location',
-      cell: ({ row }) => (
-        <div className="text-xs max-w-[200px] truncate">{row.getValue('location')}</div>
-      ),
+      cell: ({ row }) => {
+        const isExpanded = expandedRows.has(row.original.id + '-location')
+        const location = row.getValue('location') as string
+        const isLocationLong = location.length > 50
+        
+        const toggleExpand = () => {
+          const newExpanded = new Set(expandedRows)
+          const key = row.original.id + '-location'
+          if (newExpanded.has(key)) {
+            newExpanded.delete(key)
+          } else {
+            newExpanded.add(key)
+          }
+          setExpandedRows(newExpanded)
+        }
+        
+        return (
+          <div className="max-w-[200px]">
+            <button
+              onClick={toggleExpand}
+              className="text-left w-full hover:bg-muted/50 rounded p-1 -m-1 transition-colors cursor-pointer"
+            >
+              <div className="text-xs">
+                <div className={isExpanded ? 'whitespace-normal' : 'line-clamp-2'}>
+                  {location}
+                </div>
+                {!isExpanded && isLocationLong && (
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">...</span>
+                )}
+              </div>
+            </button>
+          </div>
+        )
+      },
     },
     {
       accessorKey: 'answeredBy',
@@ -273,61 +343,98 @@ export default function ActionCenter() {
           )
         }
         
+        // If there are photos, show them
+        if (actionTaken.photos && actionTaken.photos.length > 0) {
+          return (
+            <div className="flex gap-1">
+              {actionTaken.photos.slice(0, 2).map((photo, index) => (
+                photo.fileType === 'document' ? (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      // Open base64 document in new window
+                      const newWindow = window.open()
+                      if (newWindow) {
+                        newWindow.document.write(`
+                          <html>
+                            <head>
+                              <title>${photo.fileName || 'Document'}</title>
+                              <style>
+                                body { margin: 0; padding: 0; }
+                                iframe { width: 100vw; height: 100vh; border: none; }
+                              </style>
+                            </head>
+                            <body>
+                              <iframe src="${photo.url}"></iframe>
+                            </body>
+                          </html>
+                        `)
+                        newWindow.document.close()
+                      }
+                    }}
+                    className="w-10 h-10 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
+                    title={photo.fileName || 'Document'}
+                  >
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                ) : (
+                  <a
+                    key={index}
+                    href={photo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <LazyImage
+                      src={photo.url}
+                      alt={`Action ${index + 1}`}
+                      className="w-10 h-10 object-cover rounded border hover:opacity-80 transition-opacity cursor-pointer"
+                    />
+                  </a>
+                )
+              ))}
+              {actionTaken.photos.length > 2 && (
+                <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
+                  +{actionTaken.photos.length - 2}
+                </div>
+              )}
+            </div>
+          )
+        }
+        
+        // If no photos, show action notes with accordion-style dropdown
+        const isExpanded = expandedRows.has(row.original.id + '-action')
+        const notes = actionTaken.notes || 'No notes provided'
+        const isNotesLong = notes.length > 50
+        
+        const toggleExpand = () => {
+          const newExpanded = new Set(expandedRows)
+          const key = row.original.id + '-action'
+          if (newExpanded.has(key)) {
+            newExpanded.delete(key)
+          } else {
+            newExpanded.add(key)
+          }
+          setExpandedRows(newExpanded)
+        }
+        
         return (
-          <div className="flex gap-1">
-            {actionTaken.photos.slice(0, 2).map((photo, index) => (
-              photo.fileType === 'document' ? (
-                <button
-                  key={index}
-                  onClick={() => {
-                    // Open base64 document in new window
-                    const newWindow = window.open()
-                    if (newWindow) {
-                      newWindow.document.write(`
-                        <html>
-                          <head>
-                            <title>${photo.fileName || 'Document'}</title>
-                            <style>
-                              body { margin: 0; padding: 0; }
-                              iframe { width: 100vw; height: 100vh; border: none; }
-                            </style>
-                          </head>
-                          <body>
-                            <iframe src="${photo.url}"></iframe>
-                          </body>
-                        </html>
-                      `)
-                      newWindow.document.close()
-                    }
-                  }}
-                  className="w-10 h-10 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
-                  title={photo.fileName || 'Document'}
-                >
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </button>
-              ) : (
-                <a
-                  key={index}
-                  href={photo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block"
-                >
-                  <LazyImage
-                    src={photo.url}
-                    alt={`Action ${index + 1}`}
-                    className="w-10 h-10 object-cover rounded border hover:opacity-80 transition-opacity cursor-pointer"
-                  />
-                </a>
-              )
-            ))}
-            {actionTaken.photos.length > 2 && (
-              <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                +{actionTaken.photos.length - 2}
+          <div className="max-w-[200px]">
+            <button
+              onClick={toggleExpand}
+              className="text-left w-full hover:bg-muted/50 rounded p-1 -m-1 transition-colors cursor-pointer"
+            >
+              <div className="text-xs text-muted-foreground">
+                <div className={isExpanded ? 'whitespace-normal' : 'line-clamp-2'}>
+                  {notes}
+                </div>
+                {!isExpanded && isNotesLong && (
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">...</span>
+                )}
               </div>
-            )}
+            </button>
           </div>
         )
       },
@@ -385,7 +492,7 @@ export default function ActionCenter() {
         )
       },
     },
-  ], []) // Empty dependency - columns don't change
+  ], [expandedRows]) // Include expandedRows so columns re-render when expansion state changes
 
   // Apply filters with useMemo
   const filteredData = useMemo(() => {
@@ -459,12 +566,20 @@ export default function ActionCenter() {
     },
   })
 
-  // Stats with useMemo
+  // Stats with useMemo - split by category
   const stats = useMemo(() => ({
     total: concerns.length,
+    totalEnvironmental: concerns.filter((a) => a.category === 'environmental').length,
+    totalAgricultural: concerns.filter((a) => a.category === 'agricultural').length,
     pending: concerns.filter((a) => a.status === 'pending').length,
+    pendingEnvironmental: concerns.filter((a) => a.status === 'pending' && a.category === 'environmental').length,
+    pendingAgricultural: concerns.filter((a) => a.status === 'pending' && a.category === 'agricultural').length,
     inProgress: concerns.filter((a) => a.status === 'in-progress').length,
+    inProgressEnvironmental: concerns.filter((a) => a.status === 'in-progress' && a.category === 'environmental').length,
+    inProgressAgricultural: concerns.filter((a) => a.status === 'in-progress' && a.category === 'agricultural').length,
     completed: concerns.filter((a) => a.status === 'completed').length,
+    completedEnvironmental: concerns.filter((a) => a.status === 'completed' && a.category === 'environmental').length,
+    completedAgricultural: concerns.filter((a) => a.status === 'completed' && a.category === 'agricultural').length,
   }), [concerns])
 
   // Export filtered data as PDF with full details
@@ -759,6 +874,17 @@ export default function ActionCenter() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="mt-2 flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="text-emerald-600 font-semibold">{stats.totalEnvironmental}</span>
+                  <span className="text-muted-foreground">Environmental</span>
+                </div>
+                <div className="text-muted-foreground">/</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-600 font-semibold">{stats.totalAgricultural}</span>
+                  <span className="text-muted-foreground">Agricultural</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -770,6 +896,17 @@ export default function ActionCenter() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              <div className="mt-2 flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="text-emerald-600 font-semibold">{stats.pendingEnvironmental}</span>
+                  <span className="text-muted-foreground">Environmental</span>
+                </div>
+                <div className="text-muted-foreground">/</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-600 font-semibold">{stats.pendingAgricultural}</span>
+                  <span className="text-muted-foreground">Agricultural</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -781,6 +918,17 @@ export default function ActionCenter() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div>
+              <div className="mt-2 flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="text-emerald-600 font-semibold">{stats.inProgressEnvironmental}</span>
+                  <span className="text-muted-foreground">Environmental</span>
+                </div>
+                <div className="text-muted-foreground">/</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-600 font-semibold">{stats.inProgressAgricultural}</span>
+                  <span className="text-muted-foreground">Agricultural</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -792,6 +940,17 @@ export default function ActionCenter() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+              <div className="mt-2 flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="text-emerald-600 font-semibold">{stats.completedEnvironmental}</span>
+                  <span className="text-muted-foreground">Environmental</span>
+                </div>
+                <div className="text-muted-foreground">/</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-600 font-semibold">{stats.completedAgricultural}</span>
+                  <span className="text-muted-foreground">Agricultural</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>

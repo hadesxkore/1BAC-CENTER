@@ -16,7 +16,7 @@ import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
 import { uploadToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
 
 interface PNPReport {

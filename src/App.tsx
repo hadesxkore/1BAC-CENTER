@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store'
-import { Toaster } from '@/components/ui/sonner'
+import { Toaster } from 'sileo'
 import Login from './pages/Login'
 import StaffLayout from './pages/staff/StaffLayout'
 import Dashboard from './pages/staff/Dashboard'
@@ -15,34 +15,44 @@ function App() {
   const { isAuthenticated } = useAppStore()
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/login"
-          element={!isAuthenticated ? <Login /> : <Navigate to="/staff/dashboard" replace />}
-        />
-        
-        <Route
-          path="/staff"
-          element={isAuthenticated ? <StaffLayout /> : <Navigate to="/login" replace />}
-        >
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="action-center" element={<ActionCenter />} />
-          <Route path="1bac" element={<OneBAC />} />
-          <Route path="pnp" element={<PNP />} />
-          <Route path="report" element={<Report />} />
-          <Route path="users" element={<Users />} />
-          <Route path="settings" element={<Settings />} />
-          <Route index element={<Navigate to="dashboard" replace />} />
-        </Route>
+    <Toaster 
+      position="top-center"
+      options={{
+        fill: "#1f2937", // Dark gray background to match your theme
+        styles: {
+          title: "text-white!",
+          description: "text-white/75! text-center!",
+        },
+      }}
+    >
+      <BrowserRouter>
+        <Routes>
+          <Route
+            path="/login"
+            element={!isAuthenticated ? <Login /> : <Navigate to="/staff/dashboard" replace />}
+          />
+          
+          <Route
+            path="/staff"
+            element={isAuthenticated ? <StaffLayout /> : <Navigate to="/login" replace />}
+          >
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="action-center" element={<ActionCenter />} />
+            <Route path="1bac" element={<OneBAC />} />
+            <Route path="pnp" element={<PNP />} />
+            <Route path="report" element={<Report />} />
+            <Route path="users" element={<Users />} />
+            <Route path="settings" element={<Settings />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
+          </Route>
 
-        <Route
-          path="/"
-          element={<Navigate to={isAuthenticated ? "/staff/dashboard" : "/login"} replace />}
-        />
-      </Routes>
-      <Toaster />
-    </BrowserRouter>
+          <Route
+            path="/"
+            element={<Navigate to={isAuthenticated ? "/staff/dashboard" : "/login"} replace />}
+          />
+        </Routes>
+      </BrowserRouter>
+    </Toaster>
   )
 }
 

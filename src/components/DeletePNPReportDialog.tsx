@@ -14,7 +14,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Delete02Icon } from '@hugeicons/core-free-icons'
 import { db } from '@/config/firebase'
 import { doc, deleteDoc } from 'firebase/firestore'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 
 interface DeletePNPReportDialogProps {
   reportId: string

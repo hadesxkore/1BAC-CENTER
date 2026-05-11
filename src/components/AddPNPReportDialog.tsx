@@ -18,7 +18,7 @@ import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@
 import { db } from '@/config/firebase'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
 
 const PNP_REPORT_TITLE_SUGGESTIONS = [

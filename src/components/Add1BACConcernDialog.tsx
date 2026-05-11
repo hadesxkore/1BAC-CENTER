@@ -18,7 +18,7 @@ import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@
 import { db } from '@/config/firebase'
 import { collection, addDoc, serverTimestamp, query, getDocs, orderBy, limit } from 'firebase/firestore'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
 import type { ActionCategory } from '@/data/sampleActions'
 

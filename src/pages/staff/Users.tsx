@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { UserAdd01Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES, ENVIRONMENTAL_DEPARTMENTS, ROLES, type Role } from '@/data/municipalities'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 
 export default function Users() {
   // Personal Information

@@ -15,7 +15,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 
 interface MarkAsCompletedDialogProps {
   concernId: string

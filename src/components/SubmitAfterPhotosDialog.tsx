@@ -14,7 +14,7 @@ import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@
 import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
 
 interface PhotoImage {
@@ -112,11 +112,6 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (afterPhotos.length === 0) {
-      toast.error('Please upload at least one after photo')
-      return
-    }
 
     if (!notes.trim()) {
       toast.error('Please provide action notes')
@@ -132,38 +127,43 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
     setUploadProgress(0)
     
     try {
-      const totalImages = afterPhotos.length
+      let uploadedAfterPhotos: { url: string; publicId: string }[] = []
       
-      // Prepare files for parallel upload
-      const files = afterPhotos.map(photo => photo.file!).filter(Boolean)
-      
-      // Upload after photos with progress tracking
-      const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
-        if (stage === 'compressing') {
-          const progress = (completed / total) * 50
-          setUploadProgress(progress)
-          if (completed === 0) {
-            toast.info(`Compressing ${totalImages} images...`)
+      // Only upload photos if there are any
+      if (afterPhotos.length > 0) {
+        const totalImages = afterPhotos.length
+        
+        // Prepare files for parallel upload
+        const files = afterPhotos.map(photo => photo.file!).filter(Boolean)
+        
+        // Upload after photos with progress tracking
+        const results = await uploadMultipleToCloudinary(files, (completed, total, stage) => {
+          if (stage === 'compressing') {
+            const progress = (completed / total) * 50
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Compressing ${totalImages} images...`)
+            }
+          } else {
+            const progress = 50 + (completed / total) * 50
+            setUploadProgress(progress)
+            if (completed === 0) {
+              toast.info(`Uploading ${totalImages} images...`)
+            }
           }
-        } else {
-          const progress = 50 + (completed / total) * 50
-          setUploadProgress(progress)
-          if (completed === 0) {
-            toast.info(`Uploading ${totalImages} images...`)
-          }
+        })
+        
+        // Check if all uploads were successful
+        const failedUploads = results.filter(r => !r.success)
+        if (failedUploads.length > 0) {
+          throw new Error(`Failed to upload ${failedUploads.length} after photo(s)`)
         }
-      })
-      
-      // Check if all uploads were successful
-      const failedUploads = results.filter(r => !r.success)
-      if (failedUploads.length > 0) {
-        throw new Error(`Failed to upload ${failedUploads.length} after photo(s)`)
+        
+        uploadedAfterPhotos = results.map(r => ({
+          url: r.url!,
+          publicId: r.publicId!,
+        }))
       }
-      
-      const uploadedAfterPhotos = results.map(r => ({
-        url: r.url!,
-        publicId: r.publicId!,
-      }))
       
       // Prepare after photos data with metadata
       const afterPhotosData = {
@@ -182,8 +182,12 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
         updatedAt: serverTimestamp(),
       })
       
+      const photoText = afterPhotos.length > 0 
+        ? `Uploaded ${afterPhotos.length} image(s) and marked as completed` 
+        : 'Marked as completed (photos to follow)'
+      
       toast.success('After Photos Submitted Successfully!', {
-        description: `Uploaded ${totalImages} images and marked as completed`,
+        description: photoText,
       })
       
       // Reset form
@@ -223,7 +227,7 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
             <div className="px-6 py-6">
               <div className="space-y-6">
                 <div className="space-y-2" onPaste={handlePaste}>
-                  <Label>After Photos * (Max 5, Ctrl+V to paste)</Label>
+                  <Label>After Photos (Optional - Max 5, Ctrl+V to paste)</Label>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {afterPhotos.map((image, index) => (
                       <Card key={index} className="relative p-2 border-green-200">

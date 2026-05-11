@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
@@ -18,7 +19,7 @@ import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@
 import { db } from '@/config/firebase'
 import { collection, addDoc, serverTimestamp, query, getDocs } from 'firebase/firestore'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
 import type { ActionCategory } from '@/data/sampleActions'
 
@@ -43,6 +44,7 @@ const REPORT_TITLE_SUGGESTIONS = [
   'ALLEGED ILLEGAL CUTTING MANGO TREE',
   'ALLEGED ILLEGAL CUTTING MANGO & COCO LUMBER',
   'ALLEGED ILLEGAL CUTTING ACACIA',
+  'ALLEGED ILLEGAL CUTTING OF MANGIUM',
   'ALLEGED ILLEGAL CUTTING TREE',
 ]
 
@@ -69,6 +71,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   const [municipality, setMunicipality] = useState('')
   const [category, setCategory] = useState<ActionCategory | ''>('')
   const [assignedTo, setAssignedTo] = useState('')
+  const [showAssignedTo, setShowAssignedTo] = useState(false)
   const [reportTitle, setReportTitle] = useState('')
   const [location, setLocation] = useState('')
   const [caseRemarks, setCaseRemarks] = useState('')
@@ -359,20 +362,42 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
                   </div>
 
                   {category === 'environmental' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="assignedTo">Assign To *</Label>
-                      <Select value={assignedTo} onValueChange={setAssignedTo} disabled={isSubmitting}>
-                        <SelectTrigger id="assignedTo">
-                          <SelectValue placeholder="Select officer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ENVIRONMENTAL_OFFICERS.map((officer) => (
-                            <SelectItem key={officer} value={officer}>
-                              {officer}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="showAssignedTo" 
+                          checked={showAssignedTo}
+                          onCheckedChange={(checked) => {
+                            setShowAssignedTo(checked as boolean)
+                            if (!checked) setAssignedTo('')
+                          }}
+                          disabled={isSubmitting}
+                        />
+                        <label
+                          htmlFor="showAssignedTo"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          Assign to specific officer (Optional)
+                        </label>
+                      </div>
+                      
+                      {showAssignedTo && (
+                        <div className="space-y-2">
+                          <Label htmlFor="assignedTo">Assign To</Label>
+                          <Select value={assignedTo} onValueChange={setAssignedTo} disabled={isSubmitting}>
+                            <SelectTrigger id="assignedTo">
+                              <SelectValue placeholder="Select officer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ENVIRONMENTAL_OFFICERS.map((officer) => (
+                                <SelectItem key={officer} value={officer}>
+                                  {officer}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -522,3 +547,6 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
     </Dialog>
   )
 }
+
+
+

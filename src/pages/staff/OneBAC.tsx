@@ -99,6 +99,7 @@ export default function OneBAC() {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [globalFilter, setGlobalFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [municipalityFilter, setMunicipalityFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
@@ -390,6 +391,14 @@ export default function OneBAC() {
   // Apply filters with useMemo
   const filteredData = useMemo(() => {
     return concerns.filter((action) => {
+      // Global search filter (searches both report title and location)
+      if (globalFilter) {
+        const searchLower = globalFilter.toLowerCase()
+        const titleMatch = action.reportTitle.toLowerCase().includes(searchLower)
+        const locationMatch = action.location.toLowerCase().includes(searchLower)
+        if (!titleMatch && !locationMatch) return false
+      }
+      
       // Status filter
       if (statusFilter !== 'all' && action.status !== statusFilter) return false
       
@@ -424,7 +433,7 @@ export default function OneBAC() {
       
       return true
     })
-  }, [concerns, statusFilter, municipalityFilter, dateFrom, dateTo, advancedSearch])
+  }, [concerns, globalFilter, statusFilter, municipalityFilter, dateFrom, dateTo, advancedSearch])
 
   const table = useReactTable({
     data: filteredData,
@@ -810,11 +819,9 @@ export default function OneBAC() {
                     className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
                   />
                   <Input
-                    placeholder="Search report title..."
-                    value={(table.getColumn('reportTitle')?.getFilterValue() as string) ?? ''}
-                    onChange={(event) =>
-                      table.getColumn('reportTitle')?.setFilterValue(event.target.value)
-                    }
+                    placeholder="Search report title or location..."
+                    value={globalFilter}
+                    onChange={(event) => setGlobalFilter(event.target.value)}
                     className="pl-9"
                   />
                 </div>

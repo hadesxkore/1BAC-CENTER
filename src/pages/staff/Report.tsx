@@ -11,9 +11,13 @@ import { db } from '@/config/firebase'
 import { collection, query, orderBy, getDocs, where, Timestamp } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import ExcelJS from 'exceljs'
 import { format } from 'date-fns'
 import type { Action } from '@/data/sampleActions'
+import { getDistrictFromMunicipality } from '@/data/municipalities'
+import ExportSummaryDialog from '@/components/ExportSummaryDialog'
+import { generateCategorySummaryPDF } from '@/utils/generateCategorySummaryPDF'
 
 export default function Report() {
   const [isLoading, setIsLoading] = useState(false)
@@ -21,6 +25,7 @@ export default function Report() {
   const [reportType, setReportType] = useState<'action-center' | 'pnp'>('action-center')
   const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all')
+  const [showSummaryDialog, setShowSummaryDialog] = useState(false)
 
   // Fetch data based on filters
   const fetchData = async () => {
@@ -108,260 +113,232 @@ export default function Report() {
     fetchData()
   }, [reportType, dateRange, statusFilter])
 
-  // Generate PDF Report with Card Style Layout
+  // Generate PDF Report with Table Style organized by District
   const generatePDF = async () => {
     if (concerns.length === 0) {
       toast.error('No data to export')
       return
     }
 
-    toast.info('Generating PDF with images...')
+    toast.info('Generating PDF report...')
 
     try {
-      const doc = new jsPDF('p', 'mm', 'a4') // Portrait orientation
+      const doc = new jsPDF('l', 'mm', 'a4') // Landscape orientation for table
       const pageWidth = doc.internal.pageSize.getWidth()
       const pageHeight = doc.internal.pageSize.getHeight()
-      const margin = 15
-      const cardWidth = pageWidth - (margin * 2)
-      const cardHeight = (pageHeight - (margin * 3)) / 2 // 2 cards per page
 
-      // Helper function to load image as base64
-      const loadImageAsBase64 = async (url: string): Promise<string | null> => {
-        try {
-          const response = await fetch(url)
-          const blob = await response.blob()
-          return new Promise((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.onerror = () => resolve(null)
-            reader.readAsDataURL(blob)
-          })
-        } catch (error) {
-          console.error('Error loading image:', error)
-          return null
-        }
+      // Group concerns by district
+      const concernsByDistrict: Record<string, Action[]> = {
+        'First District': [],
+        'Second District': [],
+        'Third District': [],
+        'Unknown': [],
       }
 
-      // Helper function to draw a card
-      const drawCard = async (concern: Action, yPosition: number) => {
-        const cardX = margin
-        const cardY = yPosition
-        
-        // Card background with subtle shadow effect
-        doc.setFillColor(255, 255, 255)
-        doc.setDrawColor(230, 230, 230)
-        doc.setLineWidth(0.3)
-        doc.rect(cardX, cardY, cardWidth, cardHeight)
-
-        // Status indicator bar on left
-        const statusColor: [number, number, number] = concern.status === 'completed' 
-          ? [16, 185, 129] // Green
-          : [251, 191, 36] // Yellow
-        doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
-        doc.rect(cardX, cardY, 3, cardHeight, 'F')
-
-        // Title section
-        doc.setFontSize(12)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(30, 30, 30)
-        const titleText = concern.reportTitle.length > 65 
-          ? concern.reportTitle.substring(0, 65) + '...' 
-          : concern.reportTitle
-        const titleLines = doc.splitTextToSize(titleText, cardWidth - 50)
-        doc.text(titleLines.slice(0, 2), cardX + 8, cardY + 8)
-
-        // Status badge (top right)
-        const badgeWidth = 28
-        const badgeHeight = 6
-        const badgeX = cardX + cardWidth - badgeWidth - 5
-        const badgeY = cardY + 5
-        doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
-        doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1.5, 1.5, 'F')
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(255, 255, 255)
-        doc.text(concern.status.toUpperCase(), badgeX + badgeWidth / 2, badgeY + 4.5, { align: 'center' })
-
-        // Divider line
-        doc.setDrawColor(240, 240, 240)
-        doc.setLineWidth(0.3)
-        doc.line(cardX + 8, cardY + 18, cardX + cardWidth - 8, cardY + 18)
-
-        // Info grid
-        let currentY = cardY + 25
-        doc.setFontSize(8)
-        doc.setTextColor(100, 100, 100)
-        doc.setFont('helvetica', 'normal')
-
-        // Row 1
-        doc.text('DATE REPORTED', cardX + 8, currentY)
-        doc.text('MUNICIPALITY', cardX + 60, currentY)
-        
-        doc.setTextColor(30, 30, 30)
-        doc.setFont('helvetica', 'bold')
-        doc.text(format(new Date(concern.dateReported), 'MMM dd, yyyy'), cardX + 8, currentY + 4)
-        doc.text(concern.municipality, cardX + 60, currentY + 4)
-
-        currentY += 12
-
-        // Row 2
-        doc.setTextColor(100, 100, 100)
-        doc.setFont('helvetica', 'normal')
-        doc.text('LOCATION', cardX + 8, currentY)
-        
-        doc.setTextColor(30, 30, 30)
-        doc.setFont('helvetica', 'bold')
-        const locationText = concern.location.length > 55 
-          ? concern.location.substring(0, 55) + '...' 
-          : concern.location
-        doc.text(locationText, cardX + 8, currentY + 4)
-
-        currentY += 12
-
-        // Row 3
-        doc.setTextColor(100, 100, 100)
-        doc.setFont('helvetica', 'normal')
-        doc.text('REPORTED BY', cardX + 8, currentY)
-        
-        doc.setTextColor(30, 30, 30)
-        doc.setFont('helvetica', 'bold')
-        doc.text(concern.answeredBy, cardX + 8, currentY + 4)
-
-        currentY += 12
-
-        // Remarks section
-        doc.setTextColor(100, 100, 100)
-        doc.setFont('helvetica', 'normal')
-        doc.text('REMARKS', cardX + 8, currentY)
-        
-        doc.setTextColor(50, 50, 50)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(7.5)
-        const remarksText = concern.caseRemarks.length > 120 
-          ? concern.caseRemarks.substring(0, 120) + '...' 
-          : concern.caseRemarks
-        const remarksLines = doc.splitTextToSize(remarksText, cardWidth - 16)
-        doc.text(remarksLines.slice(0, 2), cardX + 8, currentY + 4)
-
-        currentY += 14
-
-        // Photos section
-        const photoWidth = 28
-        const photoHeight = 28
-        const photoSpacing = 3
-
-        // Before/Concern Photos
-        doc.setFontSize(8)
-        doc.setTextColor(100, 100, 100)
-        doc.setFont('helvetica', 'normal')
-        doc.text(reportType === 'action-center' ? 'CONCERN PHOTOS' : 'BEFORE PHOTOS', cardX + 8, currentY)
-        
-        currentY += 3
-        const concernPhotos = concern.concernPhotos.slice(0, 3)
-        for (let i = 0; i < concernPhotos.length; i++) {
-          const photo = concernPhotos[i]
-          const imgData = await loadImageAsBase64(photo.url)
-          if (imgData) {
-            const photoX = cardX + 8 + (i * (photoWidth + photoSpacing))
-            doc.addImage(imgData, 'JPEG', photoX, currentY, photoWidth, photoHeight)
-            doc.setDrawColor(220, 220, 220)
-            doc.setLineWidth(0.2)
-            doc.rect(photoX, currentY, photoWidth, photoHeight)
-          }
+      concerns.forEach(concern => {
+        const district = getDistrictFromMunicipality(concern.municipality)
+        if (district) {
+          concernsByDistrict[district].push(concern)
+        } else {
+          concernsByDistrict['Unknown'].push(concern)
         }
+      })
 
-        // Action/After Photos
-        if (concern.actionTaken && concern.actionTaken.photos.length > 0) {
-          const actionPhotoY = currentY + photoHeight + 5
-          doc.setFontSize(8)
-          doc.setTextColor(100, 100, 100)
-          doc.setFont('helvetica', 'normal')
-          doc.text('ACTION PHOTOS', cardX + 8, actionPhotoY)
-          
-          const actionPhotos = concern.actionTaken.photos.slice(0, 3)
-          for (let i = 0; i < actionPhotos.length; i++) {
-            const photo = actionPhotos[i]
-            const imgData = await loadImageAsBase64(photo.url)
-            if (imgData) {
-              const photoX = cardX + 8 + (i * (photoWidth + photoSpacing))
-              doc.addImage(imgData, 'JPEG', photoX, actionPhotoY + 3, photoWidth, photoHeight)
-              doc.setDrawColor(220, 220, 220)
-              doc.setLineWidth(0.2)
-              doc.rect(photoX, actionPhotoY + 3, photoWidth, photoHeight)
-            }
-          }
+      // Sort concerns within each district by municipality
+      Object.keys(concernsByDistrict).forEach(district => {
+        concernsByDistrict[district].sort((a, b) => 
+          a.municipality.localeCompare(b.municipality)
+        )
+      })
 
-          // Action notes
-          if (concern.actionTaken.notes) {
-            const notesY = actionPhotoY + photoHeight + 7
-            doc.setFontSize(7)
-            doc.setTextColor(100, 100, 100)
-            doc.setFont('helvetica', 'normal')
-            doc.text('ACTION NOTES', cardX + 8, notesY)
-            
-            doc.setTextColor(50, 50, 50)
-            doc.setFontSize(7)
-            const notesText = concern.actionTaken.notes.length > 100 
-              ? concern.actionTaken.notes.substring(0, 100) + '...' 
-              : concern.actionTaken.notes
-            const notesLines = doc.splitTextToSize(notesText, cardWidth - 16)
-            doc.text(notesLines.slice(0, 2), cardX + 8, notesY + 3)
-          }
-        }
-      }
+      let isFirstPage = true
 
-      // Generate cards (2 per page)
-      let pageNumber = 1
-      for (let i = 0; i < concerns.length; i++) {
-        const isFirstCard = i % 2 === 0
-        
-        if (i > 0 && isFirstCard) {
+      // Generate table for each district
+      Object.entries(concernsByDistrict).forEach(([district, districtConcerns]) => {
+        if (districtConcerns.length === 0) return
+
+        // Add new page for each district (except first)
+        if (!isFirstPage) {
           doc.addPage()
-          pageNumber++
         }
+        isFirstPage = false
 
-        const yPosition = isFirstCard ? margin : margin + cardHeight + margin
-        await drawCard(concerns[i], yPosition)
+        // Header
+        doc.setFontSize(18)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(30, 64, 175) // Blue
+        doc.text(
+          reportType === 'action-center' ? 'ACTION CENTER REPORT' : 'PNP REPORT',
+          pageWidth / 2,
+          15,
+          { align: 'center' }
+        )
 
-        // Add footer on last card of page
-        if (i === concerns.length - 1 || i % 2 === 1) {
-          doc.setFontSize(7)
-          doc.setFont('helvetica', 'normal')
-          doc.setTextColor(150, 150, 150)
-          
-          // Left: Report type
-          doc.text(
-            reportType === 'action-center' ? 'Action Center Report' : 'PNP Report',
-            margin,
-            pageHeight - 8
-          )
-          
-          // Center: Page number
-          doc.text(
-            `Page ${pageNumber}`,
-            pageWidth / 2,
-            pageHeight - 8,
-            { align: 'center' }
-          )
-          
-          // Right: Date
-          doc.text(
-            format(new Date(), 'MMM dd, yyyy'),
-            pageWidth - margin,
-            pageHeight - 8,
-            { align: 'right' }
-          )
-        }
-      }
+        // District Title
+        doc.setFontSize(14)
+        doc.setTextColor(0, 0, 0)
+        doc.text(district, pageWidth / 2, 23, { align: 'center' })
+
+        // Date and summary
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Generated: ${format(new Date(), 'MMMM dd, yyyy HH:mm')}`, 14, 30)
+        doc.text(
+          `Total: ${districtConcerns.length} | Pending: ${districtConcerns.filter(c => c.status === 'pending').length} | Completed: ${districtConcerns.filter(c => c.status === 'completed').length}`,
+          pageWidth - 14,
+          30,
+          { align: 'right' }
+        )
+
+        // Prepare table data
+        const tableData = districtConcerns.map((concern, index) => [
+          index + 1,
+          format(new Date(concern.dateReported), 'MMM dd, yyyy'),
+          concern.municipality,
+          concern.reportTitle.length > 40 ? concern.reportTitle.substring(0, 40) + '...' : concern.reportTitle,
+          concern.location.length > 35 ? concern.location.substring(0, 35) + '...' : concern.location,
+          concern.answeredBy,
+          concern.actionTaken?.notes 
+            ? (concern.actionTaken.notes.length > 30 ? concern.actionTaken.notes.substring(0, 30) + '...' : concern.actionTaken.notes)
+            : '-',
+          concern.actionTaken?.otherInfo
+            ? (concern.actionTaken.otherInfo.length > 30 ? concern.actionTaken.otherInfo.substring(0, 30) + '...' : concern.actionTaken.otherInfo)
+            : '-',
+          concern.actionDate 
+            ? (concern.actionDate === 'Ongoing' ? 'Ongoing' : format(new Date(concern.actionDate), 'MMM dd, yyyy'))
+            : '-',
+          concern.status.toUpperCase(),
+        ])
+
+        // Generate table
+        autoTable(doc, {
+          startY: 35,
+          head: [[
+            '#',
+            'Date Reported',
+            'Municipality',
+            'Report Title',
+            'Location',
+            'Reported By',
+            'Action Notes',
+            'Other Info',
+            'Action Date',
+            'Status'
+          ]],
+          body: tableData,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [30, 64, 175], // Blue
+            textColor: [255, 255, 255],
+            fontSize: 8,
+            fontStyle: 'bold',
+            halign: 'center',
+            valign: 'middle',
+            cellPadding: 3,
+          },
+          bodyStyles: {
+            fontSize: 7,
+            cellPadding: 2,
+            valign: 'top',
+          },
+          columnStyles: {
+            0: { cellWidth: 8, halign: 'center' }, // #
+            1: { cellWidth: 22 }, // Date Reported
+            2: { cellWidth: 22 }, // Municipality
+            3: { cellWidth: 45 }, // Report Title
+            4: { cellWidth: 40 }, // Location
+            5: { cellWidth: 22 }, // Reported By
+            6: { cellWidth: 35 }, // Action Notes
+            7: { cellWidth: 35 }, // Other Info
+            8: { cellWidth: 22 }, // Action Date
+            9: { cellWidth: 18, halign: 'center' }, // Status
+          },
+          didParseCell: (data) => {
+            // Color code status column
+            if (data.column.index === 9 && data.section === 'body') {
+              const status = data.cell.raw as string
+              if (status === 'COMPLETED') {
+                data.cell.styles.fillColor = [220, 252, 231] // Light green
+                data.cell.styles.textColor = [22, 163, 74] // Dark green
+                data.cell.styles.fontStyle = 'bold'
+              } else if (status === 'PENDING') {
+                data.cell.styles.fillColor = [254, 249, 195] // Light yellow
+                data.cell.styles.textColor = [161, 98, 7] // Dark yellow
+                data.cell.styles.fontStyle = 'bold'
+              } else if (status === 'IN-PROGRESS') {
+                data.cell.styles.fillColor = [219, 234, 254] // Light blue
+                data.cell.styles.textColor = [29, 78, 216] // Dark blue
+                data.cell.styles.fontStyle = 'bold'
+              }
+            }
+          },
+          margin: { top: 35, left: 14, right: 14, bottom: 20 },
+          didDrawPage: (data) => {
+            // Footer
+            const pageCount = (doc as any).internal.getNumberOfPages()
+            const currentPage = (doc as any).internal.getCurrentPageInfo().pageNumber
+
+            doc.setFontSize(8)
+            doc.setFont('helvetica', 'normal')
+            doc.setTextColor(150, 150, 150)
+
+            // Left: District
+            doc.text(district, 14, pageHeight - 10)
+
+            // Center: Page number
+            doc.text(
+              `Page ${currentPage} of ${pageCount}`,
+              pageWidth / 2,
+              pageHeight - 10,
+              { align: 'center' }
+            )
+
+            // Right: Report type
+            doc.text(
+              reportType === 'action-center' ? 'Action Center' : 'PNP Report',
+              pageWidth - 14,
+              pageHeight - 10,
+              { align: 'right' }
+            )
+          },
+        })
+      })
 
       // Save PDF
-      const fileName = `${reportType}_report_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+      const fileName = `${reportType}_report_by_district_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
       doc.save(fileName)
 
-      toast.success('PDF with images generated successfully!')
+      toast.success('PDF report generated successfully!')
     } catch (error) {
       console.error('Error generating PDF:', error)
       toast.error('Failed to generate PDF')
+    }
+  }
+
+  // Generate Summary PDF Report - REMOVED (will be replaced with separate Agricultural and Environmental reports)
+  const handleExportSummary = async (category: 'agricultural' | 'environmental') => {
+    if (concerns.length === 0) {
+      toast.error('No data to export')
+      return
+    }
+
+    const categoryConcerns = concerns.filter(c => c.category === category)
+    if (categoryConcerns.length === 0) {
+      toast.error(`No ${category} concerns found`)
+      return
+    }
+
+    toast.info('Generating summary report...')
+
+    try {
+      const doc = await generateCategorySummaryPDF(concerns, category, reportType, dateRange)
+      const fileName = `${reportType}_${category}_summary_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+      doc.save(fileName)
+      toast.success('Summary report generated successfully!')
+    } catch (error) {
+      console.error('Error generating summary:', error)
+      toast.error('Failed to generate summary')
     }
   }
 
@@ -535,15 +512,23 @@ export default function Report() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-3xl font-heading font-bold">Reports</h2>
-          <p className="text-muted-foreground mt-1">
-            Generate and export reports in PDF or Excel format
-          </p>
+    <>
+      <ExportSummaryDialog
+        open={showSummaryDialog}
+        onOpenChange={setShowSummaryDialog}
+        onExport={handleExportSummary}
+        isLoading={isLoading}
+      />
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-3xl font-heading font-bold">Reports</h2>
+            <p className="text-muted-foreground mt-1">
+              Generate and export reports in PDF or Excel format
+            </p>
+          </div>
         </div>
-      </div>
 
       {/* Report Configuration */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
@@ -641,12 +626,21 @@ export default function Report() {
             {/* Export Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
               <Button
+                onClick={() => setShowSummaryDialog(true)}
+                disabled={isLoading || concerns.length === 0}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+              >
+                <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
+                Export Summary
+              </Button>
+              
+              <Button
                 onClick={generatePDF}
                 disabled={isLoading || concerns.length === 0}
                 className="flex-1 bg-red-600 hover:bg-red-700"
               >
                 <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
-                Export as PDF
+                Export Detailed PDF
               </Button>
 
               <Button
@@ -692,5 +686,6 @@ export default function Report() {
         </motion.div>
       )}
     </div>
+    </>
   )
 }

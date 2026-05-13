@@ -34,6 +34,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [isCompressing, setIsCompressing] = useState(false)
   const [compressingFileName, setCompressingFileName] = useState('')
   const [notes, setNotes] = useState('')
+  const [otherInfo, setOtherInfo] = useState('')
   const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
   const [actionStatus, setActionStatus] = useState<'in-progress' | 'completed'>('completed')
   const [skipActionDate, setSkipActionDate] = useState(false)
@@ -165,8 +166,9 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!notes.trim()) {
-      toast.error('Please provide action notes')
+    // Require either action notes or other info
+    if (!notes.trim() && !otherInfo.trim()) {
+      toast.error('Please provide either Action Notes or Other Info')
       return
     }
 
@@ -224,6 +226,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       const actionTakenData = {
         photos: uploadedImages,
         notes: notes.trim(),
+        otherInfo: otherInfo.trim(),
         submittedBy: user?.name || 'Unknown',
         submittedAt: new Date().toISOString(),
       }
@@ -253,6 +256,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       
       // Reset form
       setNotes('')
+      setOtherInfo('')
       setActionDate(undefined)
       setSkipActionDate(false)
       setImages([])
@@ -423,16 +427,35 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Action Notes *</Label>
+                  <Label htmlFor="notes">Action Notes {!otherInfo.trim() && '*'}</Label>
                   <Textarea
                     id="notes"
                     placeholder="Describe the action taken to resolve this concern..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    required
+                    required={!otherInfo.trim()}
                     disabled={isSubmitting}
-                    rows={5}
+                    rows={4}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {otherInfo.trim() ? 'Optional when Other Info is provided' : 'Required if Other Info is empty'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="otherInfo">Other Info {!notes.trim() && '*'}</Label>
+                  <Textarea
+                    id="otherInfo"
+                    placeholder="Additional information (e.g., 'To be followed', pending details, etc.)..."
+                    value={otherInfo}
+                    onChange={(e) => setOtherInfo(e.target.value)}
+                    required={!notes.trim()}
+                    disabled={isSubmitting}
+                    rows={4}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {notes.trim() ? 'Optional when Action Notes is provided' : 'Required if Action Notes is empty'}
+                  </p>
                 </div>
               </div>
             </div>

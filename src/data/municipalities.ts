@@ -15,6 +15,25 @@ export const BATAAN_MUNICIPALITIES = [
 
 export type Municipality = typeof BATAAN_MUNICIPALITIES[number]
 
+// Bataan Districts
+export const BATAAN_DISTRICTS = {
+  'First District': ['Abucay', 'Orani', 'Samal', 'Hermosa'],
+  'Second District': ['Balanga City', 'Pilar', 'Orion', 'Limay'],
+  'Third District': ['Bagac', 'Dinalupihan', 'Mariveles', 'Morong'],
+} as const
+
+export type District = keyof typeof BATAAN_DISTRICTS
+
+// Helper function to get district from municipality
+export const getDistrictFromMunicipality = (municipality: string): District | null => {
+  for (const [district, municipalities] of Object.entries(BATAAN_DISTRICTS)) {
+    if (municipalities.includes(municipality as any)) {
+      return district as District
+    }
+  }
+  return null
+}
+
 export const ENVIRONMENTAL_DEPARTMENTS = [
   'PGENRO',
   'MENRO',

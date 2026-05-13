@@ -427,10 +427,57 @@ export default function ActionCenter() {
               className="text-left w-full hover:bg-muted/50 rounded p-1 -m-1 transition-colors cursor-pointer"
             >
               <div className="text-xs text-muted-foreground">
-                <div className={isExpanded ? 'whitespace-normal' : 'line-clamp-2'}>
+                <div className={isExpanded ? 'whitespace-normal break-words' : 'line-clamp-2 break-words'}>
                   {notes}
                 </div>
                 {!isExpanded && isNotesLong && (
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">...</span>
+                )}
+              </div>
+            </button>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'otherInfo',
+      header: 'Other Info',
+      cell: ({ row }) => {
+        const actionTaken = row.original.actionTaken
+        const status = row.original.status
+        
+        // Show dash if no action taken OR status is pending
+        if (!actionTaken || status === 'pending' || !actionTaken.otherInfo) {
+          return <span className="text-xs text-muted-foreground">-</span>
+        }
+        
+        // Show other info with accordion-style dropdown
+        const isExpanded = expandedRows.has(row.original.id + '-otherInfo')
+        const otherInfo = actionTaken.otherInfo || ''
+        const isOtherInfoLong = otherInfo.length > 50
+        
+        const toggleExpand = () => {
+          const newExpanded = new Set(expandedRows)
+          const key = row.original.id + '-otherInfo'
+          if (newExpanded.has(key)) {
+            newExpanded.delete(key)
+          } else {
+            newExpanded.add(key)
+          }
+          setExpandedRows(newExpanded)
+        }
+        
+        return (
+          <div className="max-w-[200px]">
+            <button
+              onClick={toggleExpand}
+              className="text-left w-full hover:bg-muted/50 rounded p-1 -m-1 transition-colors cursor-pointer"
+            >
+              <div className="text-xs text-muted-foreground">
+                <div className={isExpanded ? 'whitespace-normal break-words' : 'line-clamp-2 break-words'}>
+                  {otherInfo}
+                </div>
+                {!isExpanded && isOtherInfoLong && (
                   <span className="text-blue-600 dark:text-blue-400 font-bold">...</span>
                 )}
               </div>

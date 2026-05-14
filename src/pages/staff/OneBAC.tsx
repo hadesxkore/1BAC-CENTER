@@ -70,6 +70,7 @@ import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/fire
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { generate1BACSummaryPDF } from '@/utils/generate1BACSummaryPDF'
 
 const statusColors: Record<ActionStatus, string> = {
   pending: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
@@ -820,6 +821,26 @@ export default function OneBAC() {
     toast.success('PDF exported successfully!')
   }
 
+  // Export Summary PDF
+  const exportSummaryPDF = async () => {
+    if (concerns.length === 0) {
+      toast.error('No data to export')
+      return
+    }
+
+    toast.info('Generating summary report...')
+
+    try {
+      const doc = await generate1BACSummaryPDF(concerns, 'all')
+      const fileName = `1bac_summary_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+      doc.save(fileName)
+      toast.success('Summary report generated successfully!')
+    } catch (error) {
+      console.error('Error generating summary:', error)
+      toast.error('Failed to generate summary')
+    }
+  }
+
   // Clear all filters
   const clearFilters = () => {
     setStatusFilter('all')
@@ -973,9 +994,13 @@ export default function OneBAC() {
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                       Clear All
                     </Button>
+                    <Button variant="outline" size="sm" onClick={exportSummaryPDF} className="bg-purple-600 hover:bg-purple-700 text-white">
+                      <HugeiconsIcon icon={Download01Icon} className="w-4 h-4 mr-2" />
+                      Export Summary
+                    </Button>
                     <Button variant="outline" size="sm" onClick={exportFilteredPDF}>
                       <HugeiconsIcon icon={Download01Icon} className="w-4 h-4 mr-2" />
-                      Export ({filteredData.length})
+                      Export Detailed ({filteredData.length})
                     </Button>
                   </div>
                 </div>

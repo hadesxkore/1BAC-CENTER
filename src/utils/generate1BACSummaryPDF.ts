@@ -4,10 +4,8 @@ import { format } from 'date-fns'
 import type { Action } from '@/data/sampleActions'
 import { getDistrictFromMunicipality } from '@/data/municipalities'
 
-export const generateCategorySummaryPDF = async (
+export const generate1BACSummaryPDF = async (
   concerns: Action[],
-  category: 'agricultural' | 'environmental',
-  reportType: 'action-center' | 'pnp',
   dateRange: string
 ) => {
   const doc = new jsPDF('p', 'mm', 'a4')
@@ -47,11 +45,10 @@ export const generateCategorySummaryPDF = async (
   const actionCenterLogo = await loadImageAsBase64('/images/image.png')
 
   // Filter and calculate statistics
-  const categoryConcerns = concerns.filter(c => c.category === category)
-  const totalConcerns = categoryConcerns.length
-  const pendingCount = categoryConcerns.filter(c => c.status === 'pending').length
-  const inProgressCount = categoryConcerns.filter(c => c.status === 'in-progress').length
-  const completedCount = categoryConcerns.filter(c => c.status === 'completed').length
+  const totalConcerns = concerns.length
+  const pendingCount = concerns.filter(c => c.status === 'pending').length
+  const inProgressCount = concerns.filter(c => c.status === 'in-progress').length
+  const completedCount = concerns.filter(c => c.status === 'completed').length
   const completionRate = totalConcerns > 0 ? Math.round((completedCount / totalConcerns) * 100) : 0
 
   // District statistics
@@ -61,7 +58,7 @@ export const generateCategorySummaryPDF = async (
     'Third District': { total: 0, pending: 0, inProgress: 0, completed: 0, municipalities: {} },
   }
 
-  categoryConcerns.forEach(concern => {
+  concerns.forEach(concern => {
     const district = getDistrictFromMunicipality(concern.municipality)
     if (district) {
       districtStats[district].total++
@@ -78,23 +75,23 @@ export const generateCategorySummaryPDF = async (
 
   // Top municipalities
   const municipalityCounts: Record<string, number> = {}
-  categoryConcerns.forEach(c => {
+  concerns.forEach(c => {
     municipalityCounts[c.municipality] = (municipalityCounts[c.municipality] || 0) + 1
   })
   const topMunicipalities = Object.entries(municipalityCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
 
-  // Count report titles (case-insensitive) for this category
+  // Count report titles (case-insensitive)
   const reportTitleCounts: Record<string, number> = {}
-  categoryConcerns.forEach(concern => {
+  concerns.forEach(concern => {
     const normalizedTitle = concern.reportTitle.toLowerCase().trim()
     reportTitleCounts[normalizedTitle] = (reportTitleCounts[normalizedTitle] || 0) + 1
   })
   
   // Get the original casing for display
   const reportTitleDisplay: Record<string, string> = {}
-  categoryConcerns.forEach(concern => {
+  concerns.forEach(concern => {
     const normalizedTitle = concern.reportTitle.toLowerCase().trim()
     if (!reportTitleDisplay[normalizedTitle]) {
       reportTitleDisplay[normalizedTitle] = concern.reportTitle
@@ -106,8 +103,10 @@ export const generateCategorySummaryPDF = async (
     .slice(0, 10)
     .map(([normalizedTitle, count]) => [reportTitleDisplay[normalizedTitle], count])
 
-  const categoryLabel = category === 'agricultural' ? 'Agricultural' : 'Environmental'
-  const categoryColor: [number, number, number] = category === 'agricultural' ? [217, 119, 6] : [34, 197, 94]
+  // Analyze concern keywords - removed for 1BAC (no categories)
+
+  const categoryLabel = '1BAC'
+  const categoryColor: [number, number, number] = [147, 51, 234] // Purple for 1BAC
   const periodText = dateRange === 'all' ? 'All Time' : 
                      dateRange === 'today' ? 'Today' :
                      dateRange === 'week' ? 'Last 7 Days' :
@@ -162,7 +161,7 @@ export const generateCategorySummaryPDF = async (
   doc.setFontSize(28)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(255, 255, 255)
-  doc.text(`${categoryLabel.toUpperCase()}`, pageWidth / 2, 58, { align: 'center' })
+  doc.text('1BAC CONCERNS', pageWidth / 2, 58, { align: 'center' })
   
   doc.setFontSize(20)
   doc.text('SUMMARY REPORT', pageWidth / 2, 70, { align: 'center' })
@@ -195,8 +194,8 @@ export const generateCategorySummaryPDF = async (
   doc.text('REPORTING PERIOD', margin + 10, yPos + 10)
   
   // Calculate date range from actual data
-  if (categoryConcerns.length > 0) {
-    const dates = categoryConcerns.map(c => new Date(c.dateReported).getTime())
+  if (concerns.length > 0) {
+    const dates = concerns.map(c => new Date(c.dateReported).getTime())
     const minDate = new Date(Math.min(...dates))
     const maxDate = new Date(Math.max(...dates))
     
@@ -213,7 +212,7 @@ export const generateCategorySummaryPDF = async (
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(100, 116, 139)
     doc.text(
-      `This report analyzes ${categoryConcerns.length} ${categoryLabel.toLowerCase()} concern${categoryConcerns.length !== 1 ? 's' : ''} across all districts`,
+      `This report analyzes ${concerns.length} 1BAC concern${concerns.length !== 1 ? 's' : ''} across all districts`,
       margin + 10,
       yPos + 26
     )
@@ -226,7 +225,7 @@ export const generateCategorySummaryPDF = async (
 
   yPos += infoBoxHeight + 10
 
-  // Key metrics cards with clean design
+  // Key metrics cards with enhanced design
   const coverCardWidth = (pageWidth - 2 * margin - 8) / 3
   const coverCardHeight = 38
 
@@ -293,7 +292,7 @@ export const generateCategorySummaryPDF = async (
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(60, 60, 60)
   
-  const overviewText = `This report provides a comprehensive analysis of ${totalConcerns} ${categoryLabel.toLowerCase()} concern${totalConcerns !== 1 ? 's' : ''} recorded across the Province of Bataan${dateRange !== 'all' ? ` during the ${periodText.toLowerCase()} period` : ''}. The data encompasses ${Object.keys(districtStats).length} legislative districts and provides detailed insights into the current status, response effectiveness, and geographical distribution of concerns.`
+  const overviewText = `This report provides a comprehensive analysis of ${totalConcerns} 1BAC concern${totalConcerns !== 1 ? 's' : ''} recorded across the Province of Bataan${dateRange !== 'all' ? ` during the ${periodText.toLowerCase()} period` : ''}. The data encompasses ${Object.keys(districtStats).length} legislative districts and provides detailed insights into the current status and geographical distribution of concerns.`
   
   const overviewLines = doc.splitTextToSize(overviewText, pageWidth - 2 * margin)
   doc.text(overviewLines, margin, yPos)
@@ -375,9 +374,8 @@ export const generateCategorySummaryPDF = async (
 
   // Top concern types insight
   if (topConcernTypes.length > 0) {
-    const topTitle = topConcernTypes[0][0] as string
-    const topCount = topConcernTypes[0][1] as number
-    insights.push(`[*] Most common concern: "${topTitle}" with ${topCount} report${topCount !== 1 ? 's' : ''}.`)
+    const topThree = topConcernTypes.slice(0, 3).map(([name, count]) => `${name} (${count})`).join(', ')
+    insights.push(`[*] Most common concerns: ${topThree}.`)
   }
 
   insights.forEach(insight => {
@@ -474,7 +472,7 @@ export const generateCategorySummaryPDF = async (
 
   // Calculate monthly data
   const monthlyData: Record<string, number> = {}
-  categoryConcerns.forEach(concern => {
+  concerns.forEach(concern => {
     const date = new Date(concern.dateReported)
     const monthKey = format(date, 'MMM yyyy')
     monthlyData[monthKey] = (monthlyData[monthKey] || 0) + 1
@@ -547,7 +545,7 @@ export const generateCategorySummaryPDF = async (
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(categoryColor[0], categoryColor[1], categoryColor[2])
-  doc.text(`TOP ${categoryLabel.toUpperCase()} CONCERNS BY REPORT TITLE`, margin, yPos)
+  doc.text('TOP CONCERNS BY REPORT TITLE', margin, yPos)
   yPos += 8
 
   if (topConcernTypes.length > 0) {
@@ -608,7 +606,7 @@ export const generateCategorySummaryPDF = async (
   ]
   
   districts.forEach((district, districtIndex) => {
-    const districtConcerns = categoryConcerns.filter(c => getDistrictFromMunicipality(c.municipality) === district)
+    const districtConcerns = concerns.filter(c => getDistrictFromMunicipality(c.municipality) === district)
 
     doc.addPage()
     yPos = margin
@@ -668,7 +666,7 @@ export const generateCategorySummaryPDF = async (
       doc.setFontSize(9)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(107, 114, 128)
-      doc.text(`No ${categoryLabel.toLowerCase()} concerns recorded`, pageWidth / 2, cardY + 46, { align: 'center' })
+      doc.text(`No 1BAC concerns recorded`, pageWidth / 2, cardY + 46, { align: 'center' })
       doc.text(`for ${districtRomanNumerals[districtIndex]} in this period.`, pageWidth / 2, cardY + 52, { align: 'center' })
 
       return // Skip to next district

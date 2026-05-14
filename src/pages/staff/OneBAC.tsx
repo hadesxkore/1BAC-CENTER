@@ -64,6 +64,7 @@ import { ViewConcernDialog } from '@/components/ViewConcernDialog'
 import { EditConcernDialog } from '@/components/EditConcernDialog'
 import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
+import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
@@ -112,6 +113,9 @@ export default function OneBAC() {
   const [concerns, setConcerns] = useState<Action[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [carouselImages, setCarouselImages] = useState<Array<{ url: string; caption?: string }>>([])
+  const [carouselTitle, setCarouselTitle] = useState('')
+  const [showCarousel, setShowCarousel] = useState(false)
 
   // Real-time listener for 1BAC concerns
   useEffect(() => {
@@ -238,8 +242,17 @@ export default function OneBAC() {
       header: 'Concern Photos',
       cell: ({ row }) => {
         const photos = row.original.concernPhotos
+        if (photos.length === 0) return <span className="text-xs text-muted-foreground">-</span>
+        
         return (
-          <div className="flex gap-1">
+          <button
+            onClick={() => {
+              setCarouselImages(photos.map(p => ({ url: p.url, caption: p.fileName })))
+              setCarouselTitle('Concern Photos')
+              setShowCarousel(true)
+            }}
+            className="flex gap-1 hover:opacity-80 transition-opacity cursor-pointer"
+          >
             {photos.slice(0, 3).map((photo, index) => (
               <LazyImage
                 key={index}
@@ -249,11 +262,11 @@ export default function OneBAC() {
               />
             ))}
             {photos.length > 3 && (
-              <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
+              <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs font-medium">
                 +{photos.length - 3}
               </div>
             )}
-          </div>
+          </button>
         )
       },
     },
@@ -275,63 +288,72 @@ export default function OneBAC() {
           )
         }
         
-        // If there are photos, show them
+        // If there are photos, show them as clickable
         if (actionTaken.photos && actionTaken.photos.length > 0) {
+          // Filter out documents and only show images
+          const imagePhotos = actionTaken.photos.filter(p => p.fileType !== 'document')
+          const documentPhotos = actionTaken.photos.filter(p => p.fileType === 'document')
+          
           return (
             <div className="flex gap-1">
-              {actionTaken.photos.slice(0, 2).map((photo, index) => (
-                photo.fileType === 'document' ? (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      // Open base64 document in new window
-                      const newWindow = window.open()
-                      if (newWindow) {
-                        newWindow.document.write(`
-                          <html>
-                            <head>
-                              <title>${photo.fileName || 'Document'}</title>
-                              <style>
-                                body { margin: 0; padding: 0; }
-                                iframe { width: 100vw; height: 100vh; border: none; }
-                              </style>
-                            </head>
-                            <body>
-                              <iframe src="${photo.url}"></iframe>
-                            </body>
-                          </html>
-                        `)
-                        newWindow.document.close()
-                      }
-                    }}
-                    className="w-10 h-10 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
-                    title={photo.fileName || 'Document'}
-                  >
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                ) : (
-                  <a
-                    key={index}
-                    href={photo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block"
-                  >
+              {/* Show clickable images */}
+              {imagePhotos.length > 0 && (
+                <button
+                  onClick={() => {
+                    setCarouselImages(imagePhotos.map(p => ({ url: p.url, caption: p.fileName })))
+                    setCarouselTitle('Action Photos')
+                    setShowCarousel(true)
+                  }}
+                  className="flex gap-1 hover:opacity-80 transition-opacity cursor-pointer"
+                >
+                  {imagePhotos.slice(0, 2).map((photo, index) => (
                     <LazyImage
+                      key={index}
                       src={photo.url}
                       alt={`Action ${index + 1}`}
-                      className="w-10 h-10 object-cover rounded border hover:opacity-80 transition-opacity cursor-pointer"
+                      className="w-10 h-10 object-cover rounded border"
                     />
-                  </a>
-                )
-              ))}
-              {actionTaken.photos.length > 2 && (
-                <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                  +{actionTaken.photos.length - 2}
-                </div>
+                  ))}
+                  {imagePhotos.length > 2 && (
+                    <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs font-medium">
+                      +{imagePhotos.length - 2}
+                    </div>
+                  )}
+                </button>
               )}
+              
+              {/* Show document icons separately */}
+              {documentPhotos.map((photo, index) => (
+                <button
+                  key={`doc-${index}`}
+                  onClick={() => {
+                    const newWindow = window.open()
+                    if (newWindow) {
+                      newWindow.document.write(`
+                        <html>
+                          <head>
+                            <title>${photo.fileName || 'Document'}</title>
+                            <style>
+                              body { margin: 0; padding: 0; }
+                              iframe { width: 100vw; height: 100vh; border: none; }
+                            </style>
+                          </head>
+                          <body>
+                            <iframe src="${photo.url}"></iframe>
+                          </body>
+                        </html>
+                      `)
+                      newWindow.document.close()
+                    }
+                  }}
+                  className="w-10 h-10 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
+                  title={photo.fileName || 'Document'}
+                >
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              ))}
             </div>
           )
         }
@@ -1091,6 +1113,14 @@ export default function OneBAC() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Image Carousel Dialog */}
+      <ImageCarouselDialog
+        open={showCarousel}
+        onOpenChange={setShowCarousel}
+        images={carouselImages}
+        title={carouselTitle}
+      />
     </div>
   )
 }

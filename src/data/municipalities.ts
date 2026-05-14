@@ -27,7 +27,7 @@ export type District = keyof typeof BATAAN_DISTRICTS
 // Helper function to get district from municipality
 export const getDistrictFromMunicipality = (municipality: string): District | null => {
   for (const [district, municipalities] of Object.entries(BATAAN_DISTRICTS)) {
-    if (municipalities.includes(municipality as any)) {
+    if ((municipalities as readonly string[]).includes(municipality)) {
       return district as District
     }
   }

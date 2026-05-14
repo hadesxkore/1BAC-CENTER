@@ -12,6 +12,7 @@ export interface ConcernImage {
 export interface ActionTaken {
   photos: ConcernImage[]
   notes: string
+  otherInfo?: string
   submittedBy: string
   submittedAt: string
 }

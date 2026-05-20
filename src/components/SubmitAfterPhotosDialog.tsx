@@ -26,10 +26,12 @@ interface PhotoImage {
 interface SubmitAfterPhotosDialogProps {
   reportId: string
   reportTitle: string
+  currentStatus?: string
 }
 
-export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPhotosDialogProps) {
+export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }: SubmitAfterPhotosDialogProps) {
   const [open, setOpen] = useState(false)
+  const [showValidationConfirm, setShowValidationConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isCompressing, setIsCompressing] = useState(false)
@@ -110,19 +112,12 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
     }
   }, [afterPhotos])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, targetStatus: 'completed' | 'for-validation' = 'completed') => {
     e.preventDefault()
+    await submitPhotos(targetStatus)
+  }
 
-    if (!notes.trim()) {
-      toast.error('Please provide action notes')
-      return
-    }
-
-    if (!actionDate) {
-      toast.error('Please select action date')
-      return
-    }
-    
+  const submitPhotos = async (targetStatus: 'completed' | 'for-validation') => {
     setIsSubmitting(true)
     setUploadProgress(0)
     
@@ -168,8 +163,8 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
       // Prepare after photos data with metadata
       const afterPhotosData = {
         photos: uploadedAfterPhotos,
-        notes: notes.trim(),
-        actionDate: format(actionDate, 'yyyy-MM-dd'),
+        notes: notes.trim() || 'No notes provided',
+        actionDate: actionDate ? format(actionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
         submittedBy: user?.name || 'Unknown',
         submittedAt: new Date().toISOString(),
       }
@@ -178,13 +173,14 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
       const reportRef = doc(db, 'pnp_reports', reportId)
       await updateDoc(reportRef, {
         afterPhotos: afterPhotosData,
-        status: 'completed',
+        status: targetStatus,
         updatedAt: serverTimestamp(),
       })
       
+      const statusText = targetStatus === 'for-validation' ? 'sent for validation' : 'marked as completed'
       const photoText = afterPhotos.length > 0 
-        ? `Uploaded ${afterPhotos.length} image(s) and marked as completed` 
-        : 'Marked as completed (photos to follow)'
+        ? `Uploaded ${afterPhotos.length} image(s) and ${statusText}` 
+        : `${statusText.charAt(0).toUpperCase() + statusText.slice(1)} (photos to follow)`
       
       toast.success('After Photos Submitted Successfully!', {
         description: photoText,
@@ -196,6 +192,7 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
       setAfterPhotos([])
       setUploadProgress(0)
       setOpen(false)
+      setShowValidationConfirm(false)
       
     } catch (error) {
       console.error('Error submitting after photos:', error)
@@ -205,6 +202,10 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleValidationConfirm = async () => {
+    await submitPhotos('for-validation')
   }
 
   return (
@@ -272,7 +273,7 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="actionDate">Action Date *</Label>
+                  <Label htmlFor="actionDate">Action Date (Optional)</Label>
                   <DatePicker
                     date={actionDate}
                     onDateChange={setActionDate}
@@ -281,18 +282,17 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
                     maxDate={new Date()}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Select the date when the action was taken
+                    Select the date when the action was taken (defaults to today)
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Action Notes *</Label>
+                  <Label htmlFor="notes">Action Notes (Optional)</Label>
                   <Textarea
                     id="notes"
                     placeholder="Describe the action taken to complete this report..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    required
                     disabled={isSubmitting}
                     rows={5}
                   />
@@ -322,8 +322,13 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
               )}
             </AnimatePresence>
 
-            <div className="flex gap-2">
-              <Button type="submit" disabled={isSubmitting || isCompressing} className="flex-1 bg-green-600 hover:bg-green-700">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button 
+                type="button" 
+                onClick={(e) => handleSubmit(e, 'completed')}
+                disabled={isSubmitting || isCompressing} 
+                className="flex-1 bg-green-600 hover:bg-green-700"
+              >
                 {isSubmitting ? (
                   <div className="flex items-center gap-2">
                     <motion.div
@@ -343,10 +348,26 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
                     <span>Compressing...</span>
                   </div>
                 ) : (
-                  'Submit & Complete'
+                  'Complete'
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting || isCompressing}>
+              
+              <Button 
+                type="button" 
+                onClick={() => setShowValidationConfirm(true)}
+                disabled={isSubmitting || isCompressing} 
+                className="flex-1 bg-orange-600 hover:bg-orange-700"
+              >
+                For Validation
+              </Button>
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setOpen(false)} 
+                disabled={isSubmitting || isCompressing}
+                className="flex-1 sm:flex-none sm:w-24"
+              >
                 Cancel
               </Button>
             </div>
@@ -354,6 +375,45 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle }: SubmitAfterPh
         </div>
       </form>
       </DialogContent>
+      
+      {/* Validation Confirmation Dialog */}
+      <Dialog open={showValidationConfirm} onOpenChange={setShowValidationConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send for Validation?</DialogTitle>
+            <DialogDescription>
+              This will submit the after photos and set the status to "For Validation". The report will need to be validated before it can be marked as completed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowValidationConfirm(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleValidationConfirm}
+              disabled={isSubmitting}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {isSubmitting ? (
+                <div className="flex items-center gap-2">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full"
+                  />
+                  <span>Submitting...</span>
+                </div>
+              ) : (
+                'Confirm'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

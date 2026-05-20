@@ -67,7 +67,7 @@ import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-type PNPStatus = 'pending' | 'completed'
+type PNPStatus = 'pending' | 'for-validation' | 'completed'
 
 interface PNPReport {
   id: string
@@ -93,6 +93,7 @@ interface PNPReport {
 
 const statusColors: Record<PNPStatus, string> = {
   pending: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'for-validation': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 }
 
@@ -273,14 +274,48 @@ export default function PNP() {
       header: 'After Photos',
       cell: ({ row }) => {
         const afterPhotos = row.original.afterPhotos
+        const status = row.original.status
+        
+        // If status is for-validation, show Validate button
+        if (status === 'for-validation' && afterPhotos && afterPhotos.photos && afterPhotos.photos.length > 0) {
+          return (
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-1">
+                {afterPhotos.photos.slice(0, 3).map((photo, index) => (
+                  <LazyImage
+                    key={index}
+                    src={photo.url}
+                    alt={`After ${index + 1}`}
+                    className="w-10 h-10 object-cover rounded border"
+                  />
+                ))}
+                {afterPhotos.photos.length > 3 && (
+                  <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
+                    +{afterPhotos.photos.length - 3}
+                  </div>
+                )}
+              </div>
+              <SubmitAfterPhotosDialog
+                reportId={row.original.id}
+                reportTitle={row.original.reportTitle}
+                currentStatus={status}
+              />
+            </div>
+          )
+        }
+        
+        // If no after photos, show Submit button
         if (!afterPhotos || !afterPhotos.photos || afterPhotos.photos.length === 0) {
           return (
             <SubmitAfterPhotosDialog
               reportId={row.original.id}
               reportTitle={row.original.reportTitle}
+              currentStatus={status}
             />
           )
         }
+        
+        // Otherwise show the photos
         return (
           <div className="flex gap-1">
             {afterPhotos.photos.slice(0, 3).map((photo, index) => (
@@ -396,6 +431,7 @@ export default function PNP() {
   const stats = useMemo(() => ({
     total: reports.length,
     pending: reports.filter((r) => r.status === 'pending').length,
+    forValidation: reports.filter((r) => r.status === 'for-validation').length,
     completed: reports.filter((r) => r.status === 'completed').length,
   }), [reports])
 
@@ -685,7 +721,7 @@ export default function PNP() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="border-blue-200">
             <CardHeader className="pb-3">
@@ -709,7 +745,18 @@ export default function PNP() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-blue-200">
+          <Card className="border-orange-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-orange-700">For Validation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{stats.forValidation}</div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="border-green-200">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-green-700">Completed</CardTitle>
             </CardHeader>
@@ -721,7 +768,7 @@ export default function PNP() {
       </div>
 
       {/* Data Table */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <Card className="border-blue-200">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -761,6 +808,7 @@ export default function PNP() {
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="for-validation">For Validation</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>

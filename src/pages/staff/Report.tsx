@@ -13,53 +13,39 @@ import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import ExcelJS from 'exceljs'
-import { format } from 'date-fns'
+import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
 import type { Action } from '@/data/sampleActions'
 import { getDistrictFromMunicipality } from '@/data/municipalities'
 import ExportSummaryDialog from '@/components/ExportSummaryDialog'
+import Export1BACTypeDialog from '@/components/Export1BACTypeDialog'
 import { generateCategorySummaryPDF } from '@/utils/generateCategorySummaryPDF'
+import { generate1BACSummaryPDF } from '@/utils/generate1BACSummaryPDF'
+import { generate1BACOverallSummaryPDF } from '@/utils/generate1BACOverallSummaryPDF'
+import { generatePNPSummaryPDF } from '@/utils/generatePNPSummaryPDF'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
+import type { DateRange } from 'react-day-picker'
 
 export default function Report() {
   const [isLoading, setIsLoading] = useState(false)
   const [concerns, setConcerns] = useState<Action[]>([])
-  const [reportType, setReportType] = useState<'action-center' | 'pnp'>('action-center')
-  const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all')
+  const [oneBACConcerns, setOneBACConcerns] = useState<Action[]>([])
+  const [reportType, setReportType] = useState<'action-center' | 'pnp' | '1bac'>('action-center')
+  const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'year' | 'custom'>('all')
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all')
   const [showSummaryDialog, setShowSummaryDialog] = useState(false)
+  const [show1BACTypeDialog, setShow1BACTypeDialog] = useState(false)
+  const [show1BACSummaryLoading, setShow1BACSummaryLoading] = useState(false)
+  const [showPNPSummaryLoading, setShowPNPSummaryLoading] = useState(false)
 
   // Fetch data based on filters
   const fetchData = async () => {
     setIsLoading(true)
     try {
-      const collectionName = reportType === 'action-center' ? 'concerns' : 'pnp_reports'
+      const collectionName = reportType === 'action-center' ? 'concerns' : reportType === 'pnp' ? 'pnp_reports' : '1bac_concerns'
+      
+      // For date filtering, we need to fetch all data first since dateReported is a string, not a Timestamp
       let q = query(collection(db, collectionName), orderBy('createdAt', 'desc'))
-
-      // Apply date range filter
-      if (dateRange !== 'all') {
-        const now = new Date()
-        let startDate = new Date()
-
-        switch (dateRange) {
-          case 'today':
-            startDate.setHours(0, 0, 0, 0)
-            break
-          case 'week':
-            startDate.setDate(now.getDate() - 7)
-            break
-          case 'month':
-            startDate.setMonth(now.getMonth() - 1)
-            break
-          case 'year':
-            startDate.setFullYear(now.getFullYear() - 1)
-            break
-        }
-
-        q = query(
-          collection(db, collectionName),
-          where('createdAt', '>=', Timestamp.fromDate(startDate)),
-          orderBy('createdAt', 'desc')
-        )
-      }
 
       const snapshot = await getDocs(q)
       const data: Action[] = []
@@ -95,12 +81,51 @@ export default function Report() {
         })
       })
 
+      // Apply date range filter based on dateReported
+      let filteredByDate = data
+      if (dateRange === 'custom' && customDateRange?.from) {
+        const startDate = startOfDay(customDateRange.from)
+        const endDate = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from)
+
+        filteredByDate = data.filter(item => {
+          const reportDate = new Date(item.dateReported)
+          return isWithinInterval(reportDate, { start: startDate, end: endDate })
+        })
+      } else if (dateRange !== 'all') {
+        const now = new Date()
+        let startDate = new Date()
+
+        switch (dateRange) {
+          case 'today':
+            startDate.setHours(0, 0, 0, 0)
+            break
+          case 'week':
+            startDate.setDate(now.getDate() - 7)
+            break
+          case 'month':
+            startDate.setMonth(now.getMonth() - 1)
+            break
+          case 'year':
+            startDate.setFullYear(now.getFullYear() - 1)
+            break
+        }
+
+        filteredByDate = data.filter(item => {
+          const reportDate = new Date(item.dateReported)
+          return reportDate >= startDate
+        })
+      }
+
       // Apply status filter
       const filteredData = statusFilter === 'all'
-        ? data
-        : data.filter(item => item.status === statusFilter)
+        ? filteredByDate
+        : filteredByDate.filter(item => item.status === statusFilter)
 
-      setConcerns(filteredData)
+      if (reportType === '1bac') {
+        setOneBACConcerns(filteredData)
+      } else {
+        setConcerns(filteredData)
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
       toast.error('Failed to fetch data')
@@ -111,7 +136,7 @@ export default function Report() {
 
   useEffect(() => {
     fetchData()
-  }, [reportType, dateRange, statusFilter])
+  }, [reportType, dateRange, statusFilter, customDateRange])
 
   // Generate PDF Report with Table Style organized by District
   const generatePDF = async () => {
@@ -306,7 +331,19 @@ export default function Report() {
       })
 
       // Save PDF
-      const fileName = `${reportType}_report_by_district_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+      // Generate filename with date range
+      let dateRangeText = ''
+      if (dateRange === 'custom' && customDateRange?.from) {
+        const startMonth = format(customDateRange.from, 'MMM-yyyy')
+        const endMonth = customDateRange.to ? format(customDateRange.to, 'MMM-yyyy') : startMonth
+        dateRangeText = startMonth === endMonth ? `_${startMonth}` : `_${startMonth}_to_${endMonth}`
+      } else if (dateRange !== 'all') {
+        dateRangeText = `_${dateRange}`
+      } else {
+        dateRangeText = '_all-time'
+      }
+      
+      const fileName = `${reportType}_report_by_district${dateRangeText}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
       doc.save(fileName)
 
       toast.success('PDF report generated successfully!')
@@ -332,13 +369,110 @@ export default function Report() {
     toast.info('Generating summary report...')
 
     try {
-      const doc = await generateCategorySummaryPDF(concerns, category, reportType, dateRange)
-      const fileName = `${reportType}_${category}_summary_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+      const doc = await generateCategorySummaryPDF(concerns, category, reportType as 'action-center' | 'pnp', dateRange)
+      
+      // Generate filename with date range
+      let dateRangeText = ''
+      if (dateRange === 'custom' && customDateRange?.from) {
+        const startMonth = format(customDateRange.from, 'MMM-yyyy')
+        const endMonth = customDateRange.to ? format(customDateRange.to, 'MMM-yyyy') : startMonth
+        dateRangeText = startMonth === endMonth ? `_${startMonth}` : `_${startMonth}_to_${endMonth}`
+      } else if (dateRange !== 'all') {
+        dateRangeText = `_${dateRange}`
+      } else {
+        dateRangeText = '_all-time'
+      }
+      
+      const fileName = `${reportType}_${category}_summary${dateRangeText}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
       doc.save(fileName)
       toast.success('Summary report generated successfully!')
     } catch (error) {
       console.error('Error generating summary:', error)
       toast.error('Failed to generate summary')
+    }
+  }
+
+  // Export 1BAC Summary PDF - Show dialog to choose type
+  const export1BACSummaryPDF = async () => {
+    if (oneBACConcerns.length === 0) {
+      toast.error('No 1BAC data to export')
+      return
+    }
+
+    // Show dialog to choose between overall or per-district
+    setShow1BACTypeDialog(true)
+  }
+
+  // Handle 1BAC export type selection
+  const handle1BACExport = async (type: 'overall' | 'per-district') => {
+    setShow1BACSummaryLoading(true)
+    toast.info(`Generating 1BAC ${type === 'overall' ? 'overall' : 'per-district'} summary report...`)
+
+    try {
+      let doc
+      if (type === 'overall') {
+        doc = await generate1BACOverallSummaryPDF(oneBACConcerns, dateRange)
+      } else {
+        doc = await generate1BACSummaryPDF(oneBACConcerns, dateRange)
+      }
+      
+      // Generate filename with date range
+      let dateRangeText = ''
+      if (dateRange === 'custom' && customDateRange?.from) {
+        const startMonth = format(customDateRange.from, 'MMM-yyyy')
+        const endMonth = customDateRange.to ? format(customDateRange.to, 'MMM-yyyy') : startMonth
+        dateRangeText = startMonth === endMonth ? `_${startMonth}` : `_${startMonth}_to_${endMonth}`
+      } else if (dateRange !== 'all') {
+        dateRangeText = `_${dateRange}`
+      } else {
+        dateRangeText = '_all-time'
+      }
+      
+      const typeText = type === 'overall' ? '_overall' : '_per-district'
+      const fileName = `1bac_summary${typeText}${dateRangeText}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+      doc.save(fileName)
+      toast.success('1BAC summary report generated successfully!')
+    } catch (error) {
+      console.error('Error generating 1BAC summary:', error)
+      toast.error('Failed to generate 1BAC summary')
+    } finally {
+      setShow1BACSummaryLoading(false)
+    }
+  }
+
+  // Export PNP Summary PDF
+  const exportPNPSummaryPDF = async () => {
+    if (concerns.length === 0) {
+      toast.error('No PNP data to export')
+      return
+    }
+
+    setShowPNPSummaryLoading(true)
+    toast.info('Generating PNP summary report...')
+
+    try {
+      const doc = await generatePNPSummaryPDF(concerns, dateRange)
+      
+      // Generate filename with date range
+      let dateRangeText = ''
+      if (dateRange === 'custom' && customDateRange?.from) {
+        const startMonth = format(customDateRange.from, 'MMM-yyyy')
+        const endMonth = customDateRange.to ? format(customDateRange.to, 'MMM-yyyy') : startMonth
+        dateRangeText = startMonth === endMonth ? `_${startMonth}` : `_${startMonth}_to_${endMonth}`
+      } else if (dateRange !== 'all') {
+        dateRangeText = `_${dateRange}`
+      } else {
+        dateRangeText = '_all-time'
+      }
+      
+      const fileName = `pnp_summary${dateRangeText}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+      doc.save(fileName)
+      toast.success('PNP summary report generated successfully!')
+    } catch (error) {
+      console.error('Error generating PNP summary:', error)
+      toast.error('Failed to generate PNP summary')
+    } finally {
+      setShowPNPSummaryLoading(false)
     }
   }
 
@@ -500,7 +634,20 @@ export default function Report() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `${reportType}_report_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`
+      
+      // Generate filename with date range
+      let dateRangeText = ''
+      if (dateRange === 'custom' && customDateRange?.from) {
+        const startMonth = format(customDateRange.from, 'MMM-yyyy')
+        const endMonth = customDateRange.to ? format(customDateRange.to, 'MMM-yyyy') : startMonth
+        dateRangeText = startMonth === endMonth ? `_${startMonth}` : `_${startMonth}_to_${endMonth}`
+      } else if (dateRange !== 'all') {
+        dateRangeText = `_${dateRange}`
+      } else {
+        dateRangeText = '_all-time'
+      }
+      
+      link.download = `${reportType}_report${dateRangeText}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`
       link.click()
       window.URL.revokeObjectURL(url)
 
@@ -518,6 +665,13 @@ export default function Report() {
         onOpenChange={setShowSummaryDialog}
         onExport={handleExportSummary}
         isLoading={isLoading}
+      />
+
+      <Export1BACTypeDialog
+        open={show1BACTypeDialog}
+        onOpenChange={setShow1BACTypeDialog}
+        onExport={handle1BACExport}
+        isLoading={show1BACSummaryLoading}
       />
 
       <div className="space-y-6">
@@ -550,6 +704,7 @@ export default function Report() {
                   <SelectContent>
                     <SelectItem value="action-center">Action Center</SelectItem>
                     <SelectItem value="pnp">PNP Reports</SelectItem>
+                    <SelectItem value="1bac">1BAC Concerns</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -566,6 +721,7 @@ export default function Report() {
                     <SelectItem value="week">Last 7 Days</SelectItem>
                     <SelectItem value="month">Last 30 Days</SelectItem>
                     <SelectItem value="year">Last Year</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -585,6 +741,18 @@ export default function Report() {
               </div>
             </div>
 
+            {/* Custom Date Range Picker */}
+            {dateRange === 'custom' && (
+              <div className="space-y-2">
+                <Label>Select Custom Date Range</Label>
+                <DateRangePicker
+                  dateRange={customDateRange}
+                  onDateRangeChange={setCustomDateRange}
+                  placeholder="Pick a date range"
+                />
+              </div>
+            )}
+
             <Separator />
 
             {/* Statistics */}
@@ -593,7 +761,7 @@ export default function Report() {
                 <CardContent className="pt-6">
                   <div className="text-center">
                     <p className="text-sm font-medium text-muted-foreground">Total Reports</p>
-                    <p className="text-3xl font-bold mt-2">{concerns.length}</p>
+                    <p className="text-3xl font-bold mt-2">{reportType === '1bac' ? oneBACConcerns.length : concerns.length}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -603,7 +771,9 @@ export default function Report() {
                   <div className="text-center">
                     <p className="text-sm font-medium text-muted-foreground">Pending</p>
                     <p className="text-3xl font-bold mt-2 text-yellow-600">
-                      {concerns.filter(c => c.status === 'pending').length}
+                      {reportType === '1bac' 
+                        ? oneBACConcerns.filter(c => c.status === 'pending').length
+                        : concerns.filter(c => c.status === 'pending').length}
                     </p>
                   </div>
                 </CardContent>
@@ -614,7 +784,9 @@ export default function Report() {
                   <div className="text-center">
                     <p className="text-sm font-medium text-muted-foreground">Completed</p>
                     <p className="text-3xl font-bold mt-2 text-green-600">
-                      {concerns.filter(c => c.status === 'completed').length}
+                      {reportType === '1bac'
+                        ? oneBACConcerns.filter(c => c.status === 'completed').length
+                        : concerns.filter(c => c.status === 'completed').length}
                     </p>
                   </div>
                 </CardContent>
@@ -624,34 +796,79 @@ export default function Report() {
             <Separator />
 
             {/* Export Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button
-                onClick={() => setShowSummaryDialog(true)}
-                disabled={isLoading || concerns.length === 0}
-                className="flex-1 bg-purple-600 hover:bg-purple-700"
-              >
-                <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
-                Export Summary
-              </Button>
-              
-              <Button
-                onClick={generatePDF}
-                disabled={isLoading || concerns.length === 0}
-                className="flex-1 bg-red-600 hover:bg-red-700"
-              >
-                <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
-                Export Detailed PDF
-              </Button>
+            {reportType === '1bac' ? (
+              // 1BAC has summary export only
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  onClick={export1BACSummaryPDF}
+                  disabled={show1BACSummaryLoading || oneBACConcerns.length === 0}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700"
+                >
+                  <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
+                  Export 1BAC Summary
+                </Button>
+              </div>
+            ) : reportType === 'pnp' ? (
+              // PNP has summary + detailed PDF + Excel
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  onClick={exportPNPSummaryPDF}
+                  disabled={showPNPSummaryLoading || concerns.length === 0}
+                  className="flex-1 bg-red-600 hover:bg-red-700"
+                >
+                  <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
+                  Export PNP Summary
+                </Button>
+                
+                <Button
+                  onClick={generatePDF}
+                  disabled={isLoading || concerns.length === 0}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700"
+                >
+                  <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
+                  Export Detailed PDF
+                </Button>
 
-              <Button
-                onClick={generateExcel}
-                disabled={isLoading || concerns.length === 0}
-                className="flex-1 bg-green-600 hover:bg-green-700"
-              >
-                <HugeiconsIcon icon={FileXIcon} className="w-4 h-4 mr-2" />
-                Export as Excel
-              </Button>
-            </div>
+                <Button
+                  onClick={generateExcel}
+                  disabled={isLoading || concerns.length === 0}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  <HugeiconsIcon icon={FileXIcon} className="w-4 h-4 mr-2" />
+                  Export as Excel
+                </Button>
+              </div>
+            ) : (
+              // Action Center has category summary + detailed PDF + Excel
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  onClick={() => setShowSummaryDialog(true)}
+                  disabled={isLoading || concerns.length === 0}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700"
+                >
+                  <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
+                  Export Summary
+                </Button>
+                
+                <Button
+                  onClick={generatePDF}
+                  disabled={isLoading || concerns.length === 0}
+                  className="flex-1 bg-red-600 hover:bg-red-700"
+                >
+                  <HugeiconsIcon icon={FileDownloadIcon} className="w-4 h-4 mr-2" />
+                  Export Detailed PDF
+                </Button>
+
+                <Button
+                  onClick={generateExcel}
+                  disabled={isLoading || concerns.length === 0}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  <HugeiconsIcon icon={FileXIcon} className="w-4 h-4 mr-2" />
+                  Export as Excel
+                </Button>
+              </div>
+            )}
 
             {isLoading && (
               <div className="flex items-center justify-center py-8">
@@ -667,13 +884,13 @@ export default function Report() {
       </motion.div>
 
       {/* Preview Section */}
-      {concerns.length > 0 && (
+      {(reportType === '1bac' ? oneBACConcerns.length > 0 : concerns.length > 0) && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <Card>
             <CardHeader>
               <CardTitle>Data Preview</CardTitle>
               <CardDescription>
-                Showing {concerns.length} record(s) based on your filters
+                Showing {reportType === '1bac' ? oneBACConcerns.length : concerns.length} record(s) based on your filters
               </CardDescription>
             </CardHeader>
             <CardContent>

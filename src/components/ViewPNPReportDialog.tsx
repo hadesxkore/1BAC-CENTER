@@ -24,7 +24,7 @@ interface PNPReport {
     submittedBy: string
     submittedAt: string
   } | null
-  status: 'pending' | 'completed'
+  status: 'pending' | 'for-validation' | 'completed'
   reportedBy: string
   createdAt: string
 }
@@ -35,6 +35,7 @@ interface ViewPNPReportDialogProps {
 
 const statusColors = {
   pending: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'for-validation': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 }
 

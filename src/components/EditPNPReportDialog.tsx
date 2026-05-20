@@ -34,7 +34,7 @@ interface PNPReport {
     submittedBy: string
     submittedAt: string
   } | null
-  status: 'pending' | 'completed'
+  status: 'pending' | 'for-validation' | 'completed'
 }
 
 interface PhotoImage {

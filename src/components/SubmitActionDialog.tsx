@@ -29,6 +29,7 @@ interface SubmitActionDialogProps {
 
 export function SubmitActionDialog({ concernId, concernTitle, collectionName = 'concerns', onSubmit }: SubmitActionDialogProps) {
   const [open, setOpen] = useState(false)
+  const [showUnlocatedConfirm, setShowUnlocatedConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isCompressing, setIsCompressing] = useState(false)
@@ -36,7 +37,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [notes, setNotes] = useState('')
   const [otherInfo, setOtherInfo] = useState('')
   const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
-  const [actionStatus, setActionStatus] = useState<'in-progress' | 'completed'>('completed')
+  const [actionStatus, setActionStatus] = useState<'in-progress' | 'completed' | 'unlocated'>('completed')
   const [skipActionDate, setSkipActionDate] = useState(false)
   const [images, setImages] = useState<ConcernImage[]>([])
   const { user } = useAppStore()
@@ -177,6 +178,16 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       return
     }
     
+    // Show confirmation for unlocated status
+    if (actionStatus === 'unlocated') {
+      setShowUnlocatedConfirm(true)
+      return
+    }
+    
+    await submitAction()
+  }
+
+  const submitAction = async () => {
     setIsSubmitting(true)
     setUploadProgress(0)
     
@@ -231,12 +242,15 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         submittedAt: new Date().toISOString(),
       }
 
+      // Determine final status
+      const finalStatus = actionStatus
+
       // Update Firestore document
       const concernRef = doc(db, collectionName, concernId)
       await updateDoc(concernRef, {
         actionTaken: actionTakenData,
-        actionDate: skipActionDate ? 'Ongoing' : format(actionDate!, 'yyyy-MM-dd'),
-        status: actionStatus,
+        actionDate: skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
+        status: finalStatus,
         updatedAt: serverTimestamp(),
       })
       
@@ -245,7 +259,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         onSubmit(actionTakenData)
       }
       
-      const statusText = actionStatus === 'completed' ? 'completed' : 'in progress'
+      const statusText = finalStatus === 'unlocated' ? 'unlocated' : finalStatus === 'completed' ? 'completed' : 'in progress'
       const photoText = images.length > 0 
         ? `Uploaded ${images.length} image(s) and marked as ${statusText}` 
         : `Marked as ${statusText} (photos to follow)`
@@ -262,6 +276,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       setImages([])
       setUploadProgress(0)
       setOpen(false)
+      setShowUnlocatedConfirm(false)
       
     } catch (error) {
       console.error('Error submitting action:', error)
@@ -271,6 +286,10 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleUnlocatedConfirm = async () => {
+    await submitAction()
   }
 
   return (
@@ -328,17 +347,18 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
 
                   <div className="space-y-2">
                     <Label htmlFor="actionStatus">Action Status *</Label>
-                    <Select value={actionStatus} onValueChange={(value: 'in-progress' | 'completed') => setActionStatus(value)} disabled={isSubmitting}>
+                    <Select value={actionStatus} onValueChange={(value: 'in-progress' | 'completed' | 'unlocated') => setActionStatus(value)} disabled={isSubmitting}>
                       <SelectTrigger id="actionStatus">
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="in-progress">In Progress</SelectItem>
                         <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="unlocated">Unlocated</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Select "In Progress" if more work/photos will follow
+                      Select "Unlocated" if the reported location cannot be found
                     </p>
                   </div>
                 </div>
@@ -514,6 +534,45 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         </div>
       </form>
       </DialogContent>
+      
+      {/* Unlocated Confirmation Dialog */}
+      <Dialog open={showUnlocatedConfirm} onOpenChange={setShowUnlocatedConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark as Unlocated?</DialogTitle>
+            <DialogDescription>
+              This will mark the report as "Unlocated", indicating that the reported location could not be found or verified. The report will be closed with this status.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowUnlocatedConfirm(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUnlocatedConfirm}
+              disabled={isSubmitting}
+              className="bg-gray-600 hover:bg-gray-700"
+            >
+              {isSubmitting ? (
+                <div className="flex items-center gap-2">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full"
+                  />
+                  <span>Submitting...</span>
+                </div>
+              ) : (
+                'Confirm'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

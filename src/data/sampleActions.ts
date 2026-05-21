@@ -1,4 +1,4 @@
-export type ActionStatus = 'pending' | 'in-progress' | 'completed'
+export type ActionStatus = 'pending' | 'in-progress' | 'completed' | 'unlocated'
 export type ActionCategory = 'environmental' | 'agricultural'
 
 export interface ConcernImage {

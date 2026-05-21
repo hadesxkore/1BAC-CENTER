@@ -74,6 +74,7 @@ const statusColors: Record<ActionStatus, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
   'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  unlocated: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 }
 
 // Memoized lazy loading image component
@@ -649,6 +650,9 @@ export default function ActionCenter() {
     completed: concerns.filter((a) => a.status === 'completed').length,
     completedEnvironmental: concerns.filter((a) => a.status === 'completed' && a.category === 'environmental').length,
     completedAgricultural: concerns.filter((a) => a.status === 'completed' && a.category === 'agricultural').length,
+    unlocated: concerns.filter((a) => a.status === 'unlocated').length,
+    unlocatedEnvironmental: concerns.filter((a) => a.status === 'unlocated' && a.category === 'environmental').length,
+    unlocatedAgricultural: concerns.filter((a) => a.status === 'unlocated' && a.category === 'agricultural').length,
   }), [concerns])
 
   // Export filtered data as PDF with full details
@@ -1082,6 +1086,7 @@ export default function ActionCenter() {
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="in-progress">In Progress</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="unlocated">Unlocated</SelectItem>
                   </SelectContent>
                 </Select>
 

@@ -181,5 +181,10 @@
 
 /* Ensure toast notifications appear above modals */
 [data-sileo-toaster] {
-  z-index: 9999 !important;
+  z-index: 99999 !important;
+  position: fixed !important;
+}
+
+[data-sileo-toaster] > * {
+  z-index: 99999 !important;
 }

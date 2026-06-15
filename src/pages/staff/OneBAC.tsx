@@ -76,13 +76,13 @@ import { generate1BACSummaryPDF } from '@/utils/generate1BACSummaryPDF'
 const STATUS_LABELS: Record<string, string> = {
   'under-action': 'Under Action',
   resolved: 'Resolved',
-  close: 'Close',
+  closed: 'Closed',
 }
 
 const statusColors: Record<string, string> = {
   'under-action': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   resolved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  close: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+  closed: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 }
 
 // Memoized lazy loading image component
@@ -948,7 +948,7 @@ export default function OneBAC() {
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="under-action">Under Action</SelectItem>
                     <SelectItem value="resolved">Resolved</SelectItem>
-                    <SelectItem value="close">Close</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
                 </Select>
 

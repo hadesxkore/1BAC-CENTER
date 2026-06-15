@@ -77,7 +77,7 @@ const statusColors: Record<ActionStatus, string> = {
   unlocated: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
   'under-action': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   resolved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  close: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+  closed: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 }
 
 // Memoized lazy loading image component

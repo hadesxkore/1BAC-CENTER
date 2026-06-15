@@ -259,7 +259,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         onSubmit(actionTakenData)
       }
       
-      const statusText = finalStatus === 'resolved' ? 'resolved' : finalStatus === 'close' ? 'closed' : 'under action'
+      const statusText = finalStatus === 'resolved' ? 'resolved' : finalStatus === 'closed' ? 'closed' : 'under action'
       const photoText = images.length > 0 
         ? `Uploaded ${images.length} image(s) and marked as ${statusText}` 
         : `Marked as ${statusText} (photos to follow)`
@@ -354,7 +354,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                       <SelectContent>
                         <SelectItem value="under-action">Under Action</SelectItem>
                         <SelectItem value="resolved">Resolved</SelectItem>
-                        <SelectItem value="close">Close</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

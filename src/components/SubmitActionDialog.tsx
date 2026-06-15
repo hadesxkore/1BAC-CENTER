@@ -37,7 +37,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [notes, setNotes] = useState('')
   const [otherInfo, setOtherInfo] = useState('')
   const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
-  const [actionStatus, setActionStatus] = useState<'in-progress' | 'completed' | 'unlocated'>('completed')
+  const [actionStatus, setActionStatus] = useState<string>('resolved')
   const [skipActionDate, setSkipActionDate] = useState(false)
   const [images, setImages] = useState<ConcernImage[]>([])
   const { user } = useAppStore()
@@ -259,7 +259,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         onSubmit(actionTakenData)
       }
       
-      const statusText = finalStatus === 'unlocated' ? 'unlocated' : finalStatus === 'completed' ? 'completed' : 'in progress'
+      const statusText = finalStatus === 'resolved' ? 'resolved' : finalStatus === 'close' ? 'closed' : 'under action'
       const photoText = images.length > 0 
         ? `Uploaded ${images.length} image(s) and marked as ${statusText}` 
         : `Marked as ${statusText} (photos to follow)`
@@ -347,19 +347,16 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
 
                   <div className="space-y-2">
                     <Label htmlFor="actionStatus">Action Status *</Label>
-                    <Select value={actionStatus} onValueChange={(value: 'in-progress' | 'completed' | 'unlocated') => setActionStatus(value)} disabled={isSubmitting}>
+                    <Select value={actionStatus} onValueChange={setActionStatus} disabled={isSubmitting}>
                       <SelectTrigger id="actionStatus">
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="in-progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="unlocated">Unlocated</SelectItem>
+                        <SelectItem value="under-action">Under Action</SelectItem>
+                        <SelectItem value="resolved">Resolved</SelectItem>
+                        <SelectItem value="close">Close</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Select "Unlocated" if the reported location cannot be found
-                    </p>
                   </div>
                 </div>
 

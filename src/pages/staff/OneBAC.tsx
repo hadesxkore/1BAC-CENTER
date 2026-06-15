@@ -432,27 +432,26 @@ export default function OneBAC() {
       cell: ({ row }) => {
         const status = row.getValue('status') as string
         return (
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={statusColors[status] || ''}>
-              {STATUS_LABELS[status] || status}
-            </Badge>
-            <Select
-              value={status}
-              onValueChange={async (newStatus) => {
-                try {
-                  await updateDoc(doc(db, '1bac_concerns', row.original.id), { status: newStatus })
-                  toast.success(`Status changed to ${STATUS_LABELS[newStatus] || newStatus}`)
-                } catch { toast.error('Failed to update status') }
-              }}
-            >
-              <SelectTrigger className="w-8 h-8 p-0 border-none" />
-              <SelectContent>
-                <SelectItem value="under-action">Under Action</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-                <SelectItem value="close">Close</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select
+            value={status}
+            onValueChange={async (newStatus) => {
+              try {
+                await updateDoc(doc(db, '1bac_concerns', row.original.id), { status: newStatus })
+                toast.success(`Status changed to ${STATUS_LABELS[newStatus] || newStatus}`)
+              } catch { toast.error('Failed to update status') }
+            }}
+          >
+            <SelectTrigger className="h-7 px-2 gap-1 border">
+              <Badge variant="outline" className={`${statusColors[status] || ''} px-1.5 py-0 text-[10px]`}>
+                {STATUS_LABELS[status] || status}
+              </Badge>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="under-action">Under Action</SelectItem>
+              <SelectItem value="resolved">Resolved</SelectItem>
+              <SelectItem value="close">Close</SelectItem>
+            </SelectContent>
+          </Select>
         )
       },
     },

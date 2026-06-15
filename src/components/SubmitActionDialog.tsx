@@ -295,7 +295,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
+        <Button size="sm" className="bg-blue-600 text-white hover:bg-blue-700">
           Submit Action Taken
         </Button>
       </DialogTrigger>

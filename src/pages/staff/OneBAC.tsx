@@ -67,7 +67,7 @@ import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import { EditRemarksDialog } from '@/components/EditRemarksDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -432,26 +432,9 @@ export default function OneBAC() {
       cell: ({ row }) => {
         const status = row.getValue('status') as string
         return (
-          <Select
-            value={status}
-            onValueChange={async (newStatus) => {
-              try {
-                await updateDoc(doc(db, '1bac_concerns', row.original.id), { status: newStatus })
-                toast.success(`Status changed to ${STATUS_LABELS[newStatus] || newStatus}`)
-              } catch { toast.error('Failed to update status') }
-            }}
-          >
-            <SelectTrigger className="h-7 px-2 gap-1 border">
-              <Badge variant="outline" className={`${statusColors[status] || ''} px-1.5 py-0 text-[10px]`}>
-                {STATUS_LABELS[status] || status}
-              </Badge>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="under-action">Under Action</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-              <SelectItem value="close">Close</SelectItem>
-            </SelectContent>
-          </Select>
+          <Badge variant="outline" className={statusColors[status] || ''}>
+            {STATUS_LABELS[status] || status}
+          </Badge>
         )
       },
     },

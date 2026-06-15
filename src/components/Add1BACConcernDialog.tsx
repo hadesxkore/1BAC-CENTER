@@ -16,7 +16,7 @@ import { Add01Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
-import { collection, addDoc, serverTimestamp, query, getDocs, orderBy, limit } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, query, getDocs, orderBy, limit, where } from 'firebase/firestore'
 import { useAppStore } from '@/store'
 import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
@@ -86,6 +86,33 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
       console.error('Error loading report titles:', error)
       // Silently fail - not critical
     }
+  }
+
+  // Generate tracking number: BAC-{YEAR}-{SEQUENTIAL}
+  const generateTrackingNo = async (): Promise<string> => {
+    const year = new Date().getFullYear().toString()
+    const prefix = `BAC-${year}-`
+
+    const q = query(
+      collection(db, collectionName),
+      orderBy('trackingNo', 'desc'),
+      limit(1)
+    )
+
+    const snapshot = await getDocs(q)
+
+    if (snapshot.empty) {
+      return `${prefix}001`
+    }
+
+    const lastTrackingNo = snapshot.docs[0].data().trackingNo
+    if (!lastTrackingNo || !lastTrackingNo.startsWith(prefix)) {
+      return `${prefix}001`
+    }
+
+    const lastSeq = parseInt(lastTrackingNo.split('-')[2], 10)
+    const newSeq = lastSeq + 1
+    return `${prefix}${String(newSeq).padStart(3, '0')}`
   }
 
   // Auto-assign based on municipality
@@ -247,7 +274,9 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
       toast.info('Saving to database...')
       
       // Save to Firestore
+      const trackingNo = await generateTrackingNo()
       const concernData = {
+        trackingNo,
         dateReported: format(dateReported, 'yyyy-MM-dd'),
         dateUploaded: serverTimestamp(),
         municipality,

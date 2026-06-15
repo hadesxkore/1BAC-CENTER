@@ -1,4 +1,4 @@
-  import { useState, useEffect, useMemo, memo } from 'react'
+  import { useState, useEffect, useMemo, useRef, memo } from 'react'
 import { motion } from 'framer-motion'
 import type {
   ColumnDef,
@@ -66,7 +66,7 @@ import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -113,6 +113,7 @@ export default function OneBAC() {
   })
   const [concerns, setConcerns] = useState<Action[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const backfillAttempted = useRef(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [carouselImages, setCarouselImages] = useState<Array<{ url: string; caption?: string }>>([])
   const [carouselTitle, setCarouselTitle] = useState('')
@@ -129,6 +130,7 @@ export default function OneBAC() {
         const data = doc.data()
         concernsData.push({
           id: doc.id,
+          trackingNo: data.trackingNo,
           dateReported: data.dateReported,
           dateUploaded: data.dateUploaded instanceof Timestamp 
             ? data.dateUploaded.toDate().toISOString()
@@ -162,7 +164,77 @@ export default function OneBAC() {
     return () => unsubscribe()
   }, []) // Empty dependency array - only run once
 
+  // One-time fix: find duplicate + missing tracking numbers and reassign
+  useEffect(() => {
+    if (concerns.length === 0 || isLoading || backfillAttempted.current) return
+    backfillAttempted.current = true
+
+    const needsFix = async () => {
+      const allQ = query(collection(db, '1bac_concerns'), orderBy('createdAt', 'asc'))
+      const snapshot = await getDocs(allQ)
+
+      const seen = new Map<string, string[]>()
+      const noTracking: { id: string; year: string }[] = []
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data()
+        const tn = data.trackingNo as string | undefined
+        if (!tn) {
+          const createdAt = data.createdAt?.toDate?.()
+          noTracking.push({ id: docSnap.id, year: createdAt ? createdAt.getFullYear().toString() : '2026' })
+          continue
+        }
+        if (!seen.has(tn)) seen.set(tn, [])
+        seen.get(tn)!.push(docSnap.id)
+      }
+
+      // Find the highest legit sequence per year
+      const maxSeqByYear = new Map<string, number>()
+      const toFix: { id: string; year: string }[] = []
+
+      for (const [tn, ids] of seen) {
+        const parts = tn.split('-')
+        if (parts.length !== 3) continue
+        const year = parts[1]
+        const seq = parseInt(parts[2], 10)
+        if (isNaN(seq)) continue
+
+        // Keep the first doc (oldest), reassign the rest (duplicates)
+        for (let i = 1; i < ids.length; i++) {
+          toFix.push({ id: ids[i], year })
+        }
+        // Track the max seq from the docs we keep
+        maxSeqByYear.set(year, Math.max(maxSeqByYear.get(year) || 0, seq))
+      }
+
+      // Add records that never got a tracking number
+      toFix.push(...noTracking)
+
+      if (toFix.length === 0) return
+
+      let count = 0
+      for (const { id, year } of toFix) {
+        const nextSeq = (maxSeqByYear.get(year) || 0) + 1
+        maxSeqByYear.set(year, nextSeq)
+        await updateDoc(doc(db, '1bac_concerns', id), { trackingNo: `BAC-${year}-${String(nextSeq).padStart(3, '0')}` })
+        count++
+      }
+
+      toast.success(`Fixed ${count} tracking number(s)`)
+    }
+
+    needsFix().catch(err => console.error('Fix duplicates error:', err))
+  }, [concerns, isLoading])
+
   const columns: ColumnDef<Action>[] = useMemo(() => [
+    {
+      accessorKey: 'trackingNo',
+      header: 'Tracking No.',
+      cell: ({ row }) => {
+        const trackingNo = row.getValue('trackingNo') as string | undefined
+        return <div className="text-xs font-medium">{trackingNo || '-'}</div>
+      },
+    },
     {
       accessorKey: 'dateUploaded',
       header: ({ column }) => {
@@ -456,7 +528,7 @@ export default function OneBAC() {
     },
     {
       accessorKey: 'status',
-      header: 'Status',
+      header: 'Remarks',
       cell: ({ row }) => {
         const status = row.getValue('status') as ActionStatus
         return (
@@ -504,7 +576,8 @@ export default function OneBAC() {
         const searchLower = globalFilter.toLowerCase()
         const titleMatch = action.reportTitle.toLowerCase().includes(searchLower)
         const locationMatch = action.location.toLowerCase().includes(searchLower)
-        if (!titleMatch && !locationMatch) return false
+        const trackingMatch = action.trackingNo?.toLowerCase().includes(searchLower)
+        if (!titleMatch && !locationMatch && !trackingMatch) return false
       }
       
       // Status filter
@@ -621,7 +694,7 @@ export default function OneBAC() {
       // Concern number and status
       doc.setFontSize(11)
       doc.setFont('helvetica', 'bold')
-      doc.text(`Concern #${i + 1}`, margin + 3, yPosition + 6)
+      doc.text(`#${item.trackingNo || `Concern #${i + 1}`}`, margin + 3, yPosition + 6)
       
       // Status badge
       const statusX = pageWidth - margin - 25

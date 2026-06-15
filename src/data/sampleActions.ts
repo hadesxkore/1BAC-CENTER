@@ -19,6 +19,7 @@ export interface ActionTaken {
 
 export interface Action {
   id: string
+  trackingNo?: string
   dateReported: string
   dateUploaded: string
   municipality: string

@@ -48,7 +48,7 @@ export function ViewConcernDialog({ action }: ViewConcernDialogProps) {
             <div className="flex-1">
               <DialogTitle className="text-2xl pr-8">{action.reportTitle}</DialogTitle>
               <DialogDescription className="mt-1">
-                Concern ID: {action.id}
+                Tracking No: {action.trackingNo || action.id}
               </DialogDescription>
             </div>
             <Badge variant="outline" className={statusColors[action.status]}>

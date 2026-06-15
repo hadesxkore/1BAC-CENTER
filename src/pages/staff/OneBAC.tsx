@@ -77,6 +77,7 @@ const STATUS_LABELS: Record<string, string> = {
   'under-action': 'Under Action',
   resolved: 'Resolved',
   closed: 'Closed',
+  completed: 'Closed',
 }
 
 const statusColors: Record<string, string> = {
@@ -556,7 +557,7 @@ export default function OneBAC() {
     total: concerns.length,
     pending: concerns.filter((a) => a.status === 'pending').length,
     inProgress: concerns.filter((a) => a.status === 'in-progress').length,
-    completed: concerns.filter((a) => a.status === 'completed').length,
+    completed: concerns.filter((a) => a.status === 'completed' || a.status === 'closed').length,
   }), [concerns])
 
   // Export filtered data as PDF with full details
@@ -611,7 +612,7 @@ export default function OneBAC() {
       
       // Status badge
       const statusX = pageWidth - margin - 25
-      if (item.status === 'completed') {
+      if (item.status === 'completed' || item.status === 'closed') {
         doc.setFillColor(220, 252, 231)
         doc.setTextColor(22, 163, 74)
       } else {

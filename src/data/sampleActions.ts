@@ -1,4 +1,4 @@
-export type ActionStatus = 'pending' | 'in-progress' | 'completed' | 'unlocated'
+export type ActionStatus = 'pending' | 'in-progress' | 'completed' | 'unlocated' | 'under-action' | 'resolved' | 'close'
 export type ActionCategory = 'environmental' | 'agricultural'
 
 export interface ConcernImage {
@@ -27,6 +27,7 @@ export interface Action {
   assignedTo: string
   reportTitle: string
   caseRemarks: string
+  remarks?: string
   location: string
   concernPhotos: ConcernImage[]
   answeredBy: string

@@ -290,7 +290,7 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
         reportedBy: user?.name || 'Unknown',
         actionTaken: null,
         actionDate: null,
-        status: 'pending',
+        status: 'under-action',
         createdAt: serverTimestamp(),
         createdBy: user?.id || '',
       }

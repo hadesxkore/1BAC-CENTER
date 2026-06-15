@@ -64,19 +64,25 @@ import { ViewConcernDialog } from '@/components/ViewConcernDialog'
 import { EditConcernDialog } from '@/components/EditConcernDialog'
 import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
+import { EditRemarksDialog } from '@/components/EditRemarksDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, updateDoc } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { generate1BACSummaryPDF } from '@/utils/generate1BACSummaryPDF'
 
-const statusColors: Record<ActionStatus, string> = {
-  pending: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  unlocated: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+const STATUS_LABELS: Record<string, string> = {
+  'under-action': 'Under Action',
+  resolved: 'Resolved',
+  close: 'Close',
+}
+
+const statusColors: Record<string, string> = {
+  'under-action': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  resolved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  close: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 }
 
 // Memoized lazy loading image component
@@ -146,6 +152,7 @@ export default function OneBAC() {
           actionTaken: data.actionTaken,
           actionDate: data.actionDate,
           status: data.status,
+          remarks: data.remarks,
           reportedBy: data.reportedBy,
           createdAt: data.createdAt instanceof Timestamp 
             ? data.createdAt.toDate().toISOString()
@@ -290,8 +297,8 @@ export default function OneBAC() {
         const actionTaken = row.original.actionTaken
         const status = row.original.status
         
-        // Show Submit Action button if no action taken OR status is pending
-        if (!actionTaken || status === 'pending') {
+        // Show Submit Action button if no action taken yet
+        if (!actionTaken) {
           return (
             <SubmitActionDialog
               concernId={row.original.id}
@@ -421,15 +428,46 @@ export default function OneBAC() {
     },
     {
       accessorKey: 'status',
-      header: 'Remarks',
+      header: 'Status',
       cell: ({ row }) => {
-        const status = row.getValue('status') as ActionStatus
+        const status = row.getValue('status') as string
         return (
-          <Badge variant="outline" className={statusColors[status]}>
-            {status}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className={statusColors[status] || ''}>
+              {STATUS_LABELS[status] || status}
+            </Badge>
+            <Select
+              value={status}
+              onValueChange={async (newStatus) => {
+                try {
+                  await updateDoc(doc(db, '1bac_concerns', row.original.id), { status: newStatus })
+                  toast.success(`Status changed to ${STATUS_LABELS[newStatus] || newStatus}`)
+                } catch { toast.error('Failed to update status') }
+              }}
+            >
+              <SelectTrigger className="w-8 h-8 p-0 border-none" />
+              <SelectContent>
+                <SelectItem value="under-action">Under Action</SelectItem>
+                <SelectItem value="resolved">Resolved</SelectItem>
+                <SelectItem value="close">Close</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         )
       },
+    },
+    {
+      id: 'remarks',
+      header: 'Remarks',
+      cell: ({ row }) => (
+        <div className="max-w-[200px]">
+          <EditRemarksDialog
+            concernId={row.original.id}
+            concernTitle={row.original.reportTitle}
+            currentRemarks={row.original.remarks}
+          />
+        </div>
+      ),
     },
     {
       id: 'actions',
@@ -926,9 +964,9 @@ export default function OneBAC() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="under-action">Under Action</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="close">Close</SelectItem>
                   </SelectContent>
                 </Select>
 

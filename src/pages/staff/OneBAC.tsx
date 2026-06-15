@@ -66,7 +66,7 @@ import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -165,86 +165,39 @@ export default function OneBAC() {
     return () => unsubscribe()
   }, []) // Empty dependency array - only run once
 
-  // One-time fix: find duplicate + missing tracking numbers and reassign
+  // One-time fix: reset all tracking numbers to 1BAC-{YEAR}-{SEQ} based on createdAt
   useEffect(() => {
     if (concerns.length === 0 || isLoading || backfillAttempted.current) return
     backfillAttempted.current = true
 
-    const needsFix = async () => {
+    const fix = async () => {
       const allQ = query(collection(db, '1bac_concerns'), orderBy('createdAt', 'asc'))
       const snapshot = await getDocs(allQ)
 
-      const seen = new Map<string, string[]>()
-      const noTracking: { id: string; year: string }[] = []
-
+      const byYear = new Map<string, string[]>()
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data()
-        const tn = data.trackingNo as string | undefined
-        if (!tn) {
-          const createdAt = data.createdAt?.toDate?.()
-          noTracking.push({ id: docSnap.id, year: createdAt ? createdAt.getFullYear().toString() : '2026' })
-          continue
-        }
-        if (!seen.has(tn)) seen.set(tn, [])
-        seen.get(tn)!.push(docSnap.id)
+        const createdAt = data.createdAt?.toDate?.()
+        const year = createdAt ? createdAt.getFullYear().toString() : '2026'
+        if (!byYear.has(year)) byYear.set(year, [])
+        byYear.get(year)!.push(docSnap.id)
       }
 
-      // Find the highest legit sequence per year
-      const maxSeqByYear = new Map<string, number>()
-      const toFix: { id: string; year: string }[] = []
-
-      for (const [tn, ids] of seen) {
-        const parts = tn.split('-')
-        if (parts.length !== 3) continue
-        const prefix = parts[0]
-        const year = parts[1]
-        const seq = parseInt(parts[2], 10)
-        if (isNaN(seq)) continue
-
-        // Keep the first doc (oldest), reassign the rest (duplicates)
-        for (let i = 1; i < ids.length; i++) {
-          toFix.push({ id: ids[i], year })
-        }
-        // Only track max seq from new-format (1BAC-) — old format will be reset
-        if (prefix === '1BAC') {
-          maxSeqByYear.set(year, Math.max(maxSeqByYear.get(year) || 0, seq))
-        }
-      }
-
-      // Add records that never got a tracking number
-      toFix.push(...noTracking)
-
-      const hasOld = (): boolean => {
-        for (const tn of seen.keys()) if (tn.startsWith('BAC-')) return true
-        return false
-      }
-
-      if (toFix.length === 0 && !hasOld()) return
-
+      const batch = writeBatch(db)
       let count = 0
-
-      // Reset all old-format tracking numbers too
-      if (hasOld()) {
-        for (const [tn, ids] of seen) {
-          if (tn.startsWith('BAC-')) {
-            for (const id of ids) {
-              toFix.push({ id, year: tn.split('-')[1] })
-            }
-          }
+      for (const [year, ids] of byYear) {
+        for (let i = 0; i < ids.length; i++) {
+          const seq = String(i + 1).padStart(3, '0')
+          batch.update(doc(db, '1bac_concerns', ids[i]), { trackingNo: `1BAC-${year}-${seq}` })
+          count++
         }
       }
-
-      for (const { id, year } of toFix) {
-        const nextSeq = (maxSeqByYear.get(year) || 0) + 1
-        maxSeqByYear.set(year, nextSeq)
-        await updateDoc(doc(db, '1bac_concerns', id), { trackingNo: `1BAC-${year}-${String(nextSeq).padStart(3, '0')}` })
-        count++
-      }
+      await batch.commit()
 
       toast.success(`Assigned ${count} tracking number(s)`)
     }
 
-    needsFix().catch(err => console.error('Fix duplicates error:', err))
+    fix().catch(err => console.error('Tracking fix error:', err))
   }, [concerns, isLoading])
 
   const columns: ColumnDef<Action>[] = useMemo(() => [

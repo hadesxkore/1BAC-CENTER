@@ -196,6 +196,7 @@ export default function OneBAC() {
       for (const [tn, ids] of seen) {
         const parts = tn.split('-')
         if (parts.length !== 3) continue
+        const prefix = parts[0]
         const year = parts[1]
         const seq = parseInt(parts[2], 10)
         if (isNaN(seq)) continue
@@ -204,8 +205,10 @@ export default function OneBAC() {
         for (let i = 1; i < ids.length; i++) {
           toFix.push({ id: ids[i], year })
         }
-        // Track the max seq from the docs we keep
-        maxSeqByYear.set(year, Math.max(maxSeqByYear.get(year) || 0, seq))
+        // Only track max seq from new-format (1BAC-) — old format will be reset
+        if (prefix === '1BAC') {
+          maxSeqByYear.set(year, Math.max(maxSeqByYear.get(year) || 0, seq))
+        }
       }
 
       // Add records that never got a tracking number

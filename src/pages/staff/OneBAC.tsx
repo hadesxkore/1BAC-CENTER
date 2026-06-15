@@ -211,17 +211,34 @@ export default function OneBAC() {
       // Add records that never got a tracking number
       toFix.push(...noTracking)
 
-      if (toFix.length === 0) return
+      const hasOld = (): boolean => {
+        for (const tn of seen.keys()) if (tn.startsWith('BAC-')) return true
+        return false
+      }
+
+      if (toFix.length === 0 && !hasOld()) return
 
       let count = 0
+
+      // Reset all old-format tracking numbers too
+      if (hasOld()) {
+        for (const [tn, ids] of seen) {
+          if (tn.startsWith('BAC-')) {
+            for (const id of ids) {
+              toFix.push({ id, year: tn.split('-')[1] })
+            }
+          }
+        }
+      }
+
       for (const { id, year } of toFix) {
         const nextSeq = (maxSeqByYear.get(year) || 0) + 1
         maxSeqByYear.set(year, nextSeq)
-        await updateDoc(doc(db, '1bac_concerns', id), { trackingNo: `BAC-${year}-${String(nextSeq).padStart(3, '0')}` })
+        await updateDoc(doc(db, '1bac_concerns', id), { trackingNo: `1BAC-${year}-${String(nextSeq).padStart(3, '0')}` })
         count++
       }
 
-      toast.success(`Fixed ${count} tracking number(s)`)
+      toast.success(`Assigned ${count} tracking number(s)`)
     }
 
     needsFix().catch(err => console.error('Fix duplicates error:', err))

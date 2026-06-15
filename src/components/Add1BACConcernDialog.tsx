@@ -88,10 +88,10 @@ export function Add1BACConcernDialog({ collectionName = '1bac_concerns' }: Add1B
     }
   }
 
-  // Generate tracking number: BAC-{YEAR}-{SEQUENTIAL}
+  // Generate tracking number: 1BAC-{YEAR}-{SEQUENTIAL}
   const generateTrackingNo = async (): Promise<string> => {
     const year = new Date().getFullYear().toString()
-    const prefix = `BAC-${year}-`
+    const prefix = `1BAC-${year}-`
 
     const q = query(
       collection(db, collectionName),

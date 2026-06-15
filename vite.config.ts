@@ -10,7 +10,7 @@ export default defineConfig({
     react(), 
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icons.svg', 'images/bataanlogo.png'],
       manifest: {
         name: '1BAC Center - Bataan Action Center',

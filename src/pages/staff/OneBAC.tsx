@@ -1,4 +1,4 @@
-  import { useState, useEffect, useMemo, useRef, memo } from 'react'
+  import { useState, useEffect, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import type {
   ColumnDef,
@@ -66,7 +66,7 @@ import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -114,7 +114,6 @@ export default function OneBAC() {
   })
   const [concerns, setConcerns] = useState<Action[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const backfillAttempted = useRef(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [carouselImages, setCarouselImages] = useState<Array<{ url: string; caption?: string }>>([])
   const [carouselTitle, setCarouselTitle] = useState('')
@@ -165,40 +164,7 @@ export default function OneBAC() {
     return () => unsubscribe()
   }, []) // Empty dependency array - only run once
 
-  // One-time fix: reset all tracking numbers to 1BAC-{YEAR}-{SEQ} based on createdAt
-  useEffect(() => {
-    if (concerns.length === 0 || isLoading || backfillAttempted.current) return
-    backfillAttempted.current = true
 
-    const fix = async () => {
-      const allQ = query(collection(db, '1bac_concerns'), orderBy('createdAt', 'asc'))
-      const snapshot = await getDocs(allQ)
-
-      const byYear = new Map<string, string[]>()
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data()
-        const createdAt = data.createdAt?.toDate?.()
-        const year = createdAt ? createdAt.getFullYear().toString() : '2026'
-        if (!byYear.has(year)) byYear.set(year, [])
-        byYear.get(year)!.push(docSnap.id)
-      }
-
-      const batch = writeBatch(db)
-      let count = 0
-      for (const [year, ids] of byYear) {
-        for (let i = 0; i < ids.length; i++) {
-          const seq = String(i + 1).padStart(3, '0')
-          batch.update(doc(db, '1bac_concerns', ids[i]), { trackingNo: `1BAC-${year}-${seq}` })
-          count++
-        }
-      }
-      await batch.commit()
-
-      toast.success(`Assigned ${count} tracking number(s)`)
-    }
-
-    fix().catch(err => console.error('Tracking fix error:', err))
-  }, [concerns, isLoading])
 
   const columns: ColumnDef<Action>[] = useMemo(() => [
     {

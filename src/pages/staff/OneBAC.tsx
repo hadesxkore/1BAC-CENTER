@@ -65,9 +65,10 @@ import { EditConcernDialog } from '@/components/EditConcernDialog'
 import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import { EditRemarksDialog } from '@/components/EditRemarksDialog'
+import { UpdateStatusDialog } from '@/components/UpdateStatusDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, writeBatch, getDocs, where } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -78,6 +79,11 @@ const STATUS_LABELS: Record<string, string> = {
   resolved: 'Resolved',
   closed: 'Closed',
   completed: 'Closed',
+}
+const OLD_TO_NEW_STATUS: Record<string, string> = {
+  pending: 'under-action',
+  'in-progress': 'under-action',
+  completed: 'closed',
 }
 
 const statusColors: Record<string, string> = {
@@ -172,7 +178,33 @@ export default function OneBAC() {
     return () => unsubscribe()
   }, []) // Empty dependency array - only run once
 
+  // One-time backfill: migrate old statuses to the new system
+  useEffect(() => {
+    const backfill = async () => {
+      try {
+        const q = query(
+          collection(db, '1bac_concerns'),
+          where('status', 'in', ['pending', 'in-progress', 'completed'])
+        )
+        const snapshot = await getDocs(q)
+        if (snapshot.empty) return
 
+        const batch = writeBatch(db)
+        snapshot.forEach((d) => {
+          const oldStatus = d.data().status as string
+          const newStatus = OLD_TO_NEW_STATUS[oldStatus]
+          if (newStatus) {
+            batch.update(doc(db, '1bac_concerns', d.id), { status: newStatus })
+          }
+        })
+        await batch.commit()
+        console.log(`Backfilled ${snapshot.size} records to new statuses`)
+      } catch (err) {
+        console.error('Backfill error:', err)
+      }
+    }
+    backfill()
+  }, [])
 
   const columns: ColumnDef<Action>[] = useMemo(() => [
     {
@@ -433,9 +465,10 @@ export default function OneBAC() {
       cell: ({ row }) => {
         const status = row.getValue('status') as string
         return (
-          <Badge variant="outline" className={statusColors[status] || ''}>
-            {STATUS_LABELS[status] || status}
-          </Badge>
+          <UpdateStatusDialog
+            concernId={row.original.id}
+            currentStatus={status}
+          />
         )
       },
     },
@@ -456,7 +489,7 @@ export default function OneBAC() {
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => {
-        const isInProgress = row.original.status === 'in-progress'
+        const isUnderAction = row.original.status === 'under-action' || row.original.status === 'pending' || row.original.status === 'in-progress'
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -467,7 +500,7 @@ export default function OneBAC() {
             <DropdownMenuContent align="end">
               <ViewConcernDialog action={row.original} />
               <EditConcernDialog concern={row.original} collectionName="1bac_concerns" />
-              {isInProgress && (
+              {isUnderAction && (
                 <MarkAsCompletedDialog 
                   concernId={row.original.id} 
                   concernTitle={row.original.reportTitle}
@@ -555,9 +588,9 @@ export default function OneBAC() {
   // Stats with useMemo
   const stats = useMemo(() => ({
     total: concerns.length,
-    pending: concerns.filter((a) => a.status === 'pending').length,
-    inProgress: concerns.filter((a) => a.status === 'in-progress').length,
-    completed: concerns.filter((a) => a.status === 'completed' || a.status === 'closed').length,
+    underAction: concerns.filter((a) => a.status === 'under-action' || a.status === 'pending' || a.status === 'in-progress').length,
+    resolved: concerns.filter((a) => a.status === 'resolved').length,
+    closed: concerns.filter((a) => a.status === 'closed' || a.status === 'completed').length,
   }), [concerns])
 
   // Export filtered data as PDF with full details
@@ -613,6 +646,9 @@ export default function OneBAC() {
       // Status badge
       const statusX = pageWidth - margin - 25
       if (item.status === 'completed' || item.status === 'closed') {
+        doc.setFillColor(229, 231, 235)
+        doc.setTextColor(75, 85, 99)
+      } else if (item.status === 'resolved') {
         doc.setFillColor(220, 252, 231)
         doc.setTextColor(22, 163, 74)
       } else {
@@ -876,34 +912,34 @@ export default function OneBAC() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="border-purple-200">
+          <Card className="border-orange-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-purple-700">Pending</CardTitle>
+              <CardTitle className="text-sm font-medium text-orange-700">Under Action</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-purple-600">{stats.pending}</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.underAction}</div>
             </CardContent>
           </Card>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-purple-200">
+          <Card className="border-green-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-blue-700">In Progress</CardTitle>
+              <CardTitle className="text-sm font-medium text-green-700">Resolved</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div>
+              <div className="text-2xl font-bold text-green-600">{stats.resolved}</div>
             </CardContent>
           </Card>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="border-purple-200">
+          <Card className="border-gray-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-green-700">Completed</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-700">Closed</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+              <div className="text-2xl font-bold text-gray-600">{stats.closed}</div>
             </CardContent>
           </Card>
         </motion.div>

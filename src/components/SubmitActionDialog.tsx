@@ -355,6 +355,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                         <SelectItem value="under-action">Under Action</SelectItem>
                         <SelectItem value="resolved">Resolved</SelectItem>
                         <SelectItem value="closed">Closed</SelectItem>
+                        <SelectItem value="unlocated">Unlocated</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

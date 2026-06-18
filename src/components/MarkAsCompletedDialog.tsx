@@ -36,12 +36,12 @@ export function MarkAsCompletedDialog({
     try {
       const concernRef = doc(db, collectionName, concernId)
       await updateDoc(concernRef, {
-        status: 'completed',
+        status: 'closed',
         updatedAt: serverTimestamp(),
       })
       
       toast.success('Status Updated', {
-        description: 'Concern marked as completed successfully',
+        description: 'Concern closed successfully',
       })
       
     } catch (error) {
@@ -59,14 +59,14 @@ export function MarkAsCompletedDialog({
       <AlertDialogTrigger asChild>
         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
           <HugeiconsIcon icon={CheckmarkCircle02Icon} className="w-4 h-4 mr-2" />
-          Mark as Completed
+          Mark as Closed
         </DropdownMenuItem>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Mark as Completed?</AlertDialogTitle>
+          <AlertDialogTitle>Close this concern?</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to mark this concern as completed?
+            This will mark the concern as closed. No further action can be taken.
             <div className="mt-2 p-3 bg-muted rounded-lg">
               <p className="text-sm font-medium text-foreground">{concernTitle}</p>
             </div>
@@ -84,12 +84,12 @@ export function MarkAsCompletedDialog({
                   transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                   className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full"
                 />
-                <span>Updating...</span>
+                <span>Closing...</span>
               </div>
             ) : (
               <>
                 <HugeiconsIcon icon={CheckmarkCircle02Icon} className="w-4 h-4 mr-2" />
-                Mark as Completed
+                Close Concern
               </>
             )}
           </Button>

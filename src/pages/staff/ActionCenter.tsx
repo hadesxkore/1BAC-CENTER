@@ -63,6 +63,7 @@ import { ViewConcernDialog } from '@/components/ViewConcernDialog'
 import { EditConcernDialog } from '@/components/EditConcernDialog'
 import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
+import { UpdateStatusDialog } from '@/components/UpdateStatusDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
@@ -70,14 +71,24 @@ import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-const statusColors: Record<ActionStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-  'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  unlocated: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
-  'under-action': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  resolved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  closed: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+const STATUS_LABELS: Record<string, string> = {
+  'under-action': 'Under Action',
+  'in-progress': 'Under Action',
+  resolved: 'Resolved',
+  closed: 'Closed',
+  completed: 'Completed',
+  pending: 'Pending',
+  unlocated: 'Unlocated',
+}
+
+const statusColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 cursor-pointer hover:opacity-80',
+  'in-progress': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 cursor-pointer hover:opacity-80',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 cursor-pointer hover:opacity-80',
+  unlocated: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300 cursor-pointer hover:opacity-80',
+  'under-action': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 cursor-pointer hover:opacity-80',
+  resolved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 cursor-pointer hover:opacity-80',
+  closed: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300 cursor-pointer hover:opacity-80',
 }
 
 // Memoized lazy loading image component
@@ -350,8 +361,8 @@ export default function ActionCenter() {
         const actionTaken = row.original.actionTaken
         const status = row.original.status
         
-        // Show Submit Action button if no action taken OR status is pending
-        if (!actionTaken || status === 'pending') {
+        // Show Submit Action button if no action taken OR status needs action
+        if (!actionTaken || status === 'pending' || status === 'under-action' || status === 'in-progress') {
           return (
             <SubmitActionDialog
               concernId={row.original.id}
@@ -529,11 +540,14 @@ export default function ActionCenter() {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
-        const status = row.getValue('status') as ActionStatus
+        const status = row.getValue('status') as string
         return (
-          <Badge variant="outline" className={statusColors[status]}>
-            {status}
-          </Badge>
+          <UpdateStatusDialog
+            concernId={row.original.id}
+            currentStatus={status}
+            collectionName="concerns"
+            withCompleted
+          />
         )
       },
     },
@@ -541,7 +555,7 @@ export default function ActionCenter() {
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => {
-        const isInProgress = row.original.status === 'in-progress'
+        const isInProgress = row.original.status === 'in-progress' || row.original.status === 'pending' || row.original.status === 'under-action'
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -647,12 +661,12 @@ export default function ActionCenter() {
     pending: concerns.filter((a) => a.status === 'pending').length,
     pendingEnvironmental: concerns.filter((a) => a.status === 'pending' && a.category === 'environmental').length,
     pendingAgricultural: concerns.filter((a) => a.status === 'pending' && a.category === 'agricultural').length,
-    inProgress: concerns.filter((a) => a.status === 'in-progress').length,
-    inProgressEnvironmental: concerns.filter((a) => a.status === 'in-progress' && a.category === 'environmental').length,
-    inProgressAgricultural: concerns.filter((a) => a.status === 'in-progress' && a.category === 'agricultural').length,
-    completed: concerns.filter((a) => a.status === 'completed').length,
-    completedEnvironmental: concerns.filter((a) => a.status === 'completed' && a.category === 'environmental').length,
-    completedAgricultural: concerns.filter((a) => a.status === 'completed' && a.category === 'agricultural').length,
+    underAction: concerns.filter((a) => a.status === 'in-progress' || a.status === 'under-action').length,
+    underActionEnvironmental: concerns.filter((a) => (a.status === 'in-progress' || a.status === 'under-action') && a.category === 'environmental').length,
+    underActionAgricultural: concerns.filter((a) => (a.status === 'in-progress' || a.status === 'under-action') && a.category === 'agricultural').length,
+    completed: concerns.filter((a) => a.status === 'completed' || a.status === 'closed' || a.status === 'resolved').length,
+    completedEnvironmental: concerns.filter((a) => (a.status === 'completed' || a.status === 'closed' || a.status === 'resolved') && a.category === 'environmental').length,
+    completedAgricultural: concerns.filter((a) => (a.status === 'completed' || a.status === 'closed' || a.status === 'resolved') && a.category === 'agricultural').length,
     unlocated: concerns.filter((a) => a.status === 'unlocated').length,
     unlocatedEnvironmental: concerns.filter((a) => a.status === 'unlocated' && a.category === 'environmental').length,
     unlocatedAgricultural: concerns.filter((a) => a.status === 'unlocated' && a.category === 'agricultural').length,
@@ -1006,18 +1020,18 @@ export default function ActionCenter() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+              <CardTitle className="text-sm font-medium">Under Action</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.underAction}</div>
               <div className="mt-2 flex items-center gap-3 text-sm">
                 <div className="flex items-center gap-1">
-                  <span className="text-emerald-600 font-semibold">{stats.inProgressEnvironmental}</span>
+                  <span className="text-emerald-600 font-semibold">{stats.underActionEnvironmental}</span>
                   <span className="text-muted-foreground">Environmental</span>
                 </div>
                 <div className="text-muted-foreground">/</div>
                 <div className="flex items-center gap-1">
-                  <span className="text-amber-600 font-semibold">{stats.inProgressAgricultural}</span>
+                  <span className="text-amber-600 font-semibold">{stats.underActionAgricultural}</span>
                   <span className="text-muted-foreground">Agricultural</span>
                 </div>
               </div>
@@ -1040,6 +1054,28 @@ export default function ActionCenter() {
                 <div className="text-muted-foreground">/</div>
                 <div className="flex items-center gap-1">
                   <span className="text-amber-600 font-semibold">{stats.completedAgricultural}</span>
+                  <span className="text-muted-foreground">Agricultural</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Unlocated</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-600">{stats.unlocated}</div>
+              <div className="mt-2 flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="text-emerald-600 font-semibold">{stats.unlocatedEnvironmental}</span>
+                  <span className="text-muted-foreground">Environmental</span>
+                </div>
+                <div className="text-muted-foreground">/</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-600 font-semibold">{stats.unlocatedAgricultural}</span>
                   <span className="text-muted-foreground">Agricultural</span>
                 </div>
               </div>
@@ -1087,8 +1123,10 @@ export default function ActionCenter() {
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="under-action">Under Action</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
                     <SelectItem value="unlocated">Unlocated</SelectItem>
                   </SelectContent>
                 </Select>

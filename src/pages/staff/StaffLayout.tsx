@@ -28,6 +28,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LiveClock } from '@/components/LiveClock'
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -361,6 +362,7 @@ export default function StaffLayout() {
                   {currentPageTitle}
                 </h1>
               </div>
+              <LiveClock />
               <ThemeToggle />
             </div>
           </header>

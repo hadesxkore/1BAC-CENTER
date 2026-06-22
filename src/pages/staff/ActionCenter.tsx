@@ -45,6 +45,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Search01Icon,
@@ -1178,19 +1180,38 @@ export default function ActionCenter() {
                     </Button>
                   </CollapsibleTrigger>
                   <div className="flex gap-2 items-center">
-                    <Select value={reportTitleFilter} onValueChange={setReportTitleFilter}>
-                      <SelectTrigger className="w-[200px] h-8 text-sm">
-                        <SelectValue placeholder="Report Title" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Report Titles</SelectItem>
-                        {uniqueReportTitles.map((title) => (
-                          <SelectItem key={title} value={title}>
-                            {title.length > 30 ? title.slice(0, 30) + '...' : title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-[200px] h-8 text-sm justify-start font-normal">
+                          {reportTitleFilter === 'all' ? 'All Report Titles' : (reportTitleFilter.length > 25 ? reportTitleFilter.slice(0, 25) + '...' : reportTitleFilter)}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0" align="end">
+                        <Command>
+                          <CommandInput placeholder="Search report title..." />
+                          <CommandList>
+                            <CommandEmpty>No title found.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="all"
+                                onSelect={() => setReportTitleFilter('all')}
+                              >
+                                All Report Titles
+                              </CommandItem>
+                              {uniqueReportTitles.map((title) => (
+                                <CommandItem
+                                  key={title}
+                                  value={title}
+                                  onSelect={(value) => setReportTitleFilter(value)}
+                                >
+                                  {title.length > 40 ? title.slice(0, 40) + '...' : title}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                       Clear All
                     </Button>

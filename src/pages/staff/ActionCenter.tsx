@@ -118,6 +118,7 @@ export default function ActionCenter() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [municipalityFilter, setMunicipalityFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [reportTitleFilter, setReportTitleFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
   const [advancedSearch, setAdvancedSearch] = useState({
@@ -600,6 +601,9 @@ export default function ActionCenter() {
       
       // Category filter
       if (categoryFilter !== 'all' && action.category !== categoryFilter) return false
+
+      // Report Title filter
+      if (reportTitleFilter !== 'all' && action.reportTitle !== reportTitleFilter) return false
       
       // Date range filter
       if (dateFrom || dateTo) {
@@ -629,7 +633,13 @@ export default function ActionCenter() {
       
       return true
     })
-  }, [concerns, globalFilter, statusFilter, municipalityFilter, categoryFilter, dateFrom, dateTo, advancedSearch])
+  }, [concerns, globalFilter, statusFilter, municipalityFilter, categoryFilter, reportTitleFilter, dateFrom, dateTo, advancedSearch])
+
+  // Unique report titles for filter dropdown
+  const uniqueReportTitles = useMemo(() => {
+    const titles = [...new Set(concerns.map((c) => c.reportTitle).filter(Boolean))]
+    return titles.sort()
+  }, [concerns])
 
   const table = useReactTable({
     data: filteredData,
@@ -941,6 +951,7 @@ export default function ActionCenter() {
     setStatusFilter('all')
     setMunicipalityFilter('all')
     setCategoryFilter('all')
+    setReportTitleFilter('all')
     setDateFrom(undefined)
     setDateTo(undefined)
     setAdvancedSearch({ location: '', assignedTo: '', reportedBy: '' })
@@ -1166,7 +1177,20 @@ export default function ActionCenter() {
                       Advanced Filters
                     </Button>
                   </CollapsibleTrigger>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <Select value={reportTitleFilter} onValueChange={setReportTitleFilter}>
+                      <SelectTrigger className="w-[200px] h-8 text-sm">
+                        <SelectValue placeholder="Report Title" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Report Titles</SelectItem>
+                        {uniqueReportTitles.map((title) => (
+                          <SelectItem key={title} value={title}>
+                            {title.length > 30 ? title.slice(0, 30) + '...' : title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                       Clear All
                     </Button>

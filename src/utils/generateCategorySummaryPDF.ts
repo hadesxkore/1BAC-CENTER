@@ -50,8 +50,9 @@ export const generateCategorySummaryPDF = async (
   const categoryConcerns = concerns.filter(c => c.category === category)
   const totalConcerns = categoryConcerns.length
   const pendingCount = categoryConcerns.filter(c => c.status === 'pending').length
-  const inProgressCount = categoryConcerns.filter(c => c.status === 'in-progress').length
-  const completedCount = categoryConcerns.filter(c => c.status === 'completed').length
+  const inProgressCount = categoryConcerns.filter(c => c.status === 'in-progress' || c.status === 'under-action').length
+  const completedCount = categoryConcerns.filter(c => c.status === 'completed' || c.status === 'closed' || c.status === 'resolved').length
+  const unlocatedCount = categoryConcerns.filter(c => c.status === 'unlocated').length
   const completionRate = totalConcerns > 0 ? Math.round((completedCount / totalConcerns) * 100) : 0
 
   // District statistics
@@ -66,8 +67,8 @@ export const generateCategorySummaryPDF = async (
     if (district) {
       districtStats[district].total++
       if (concern.status === 'pending') districtStats[district].pending++
-      if (concern.status === 'in-progress') districtStats[district].inProgress++
-      if (concern.status === 'completed') districtStats[district].completed++
+      if (concern.status === 'in-progress' || concern.status === 'under-action') districtStats[district].inProgress++
+      if (concern.status === 'completed' || concern.status === 'closed' || concern.status === 'resolved') districtStats[district].completed++
       
       if (!districtStats[district].municipalities[concern.municipality]) {
         districtStats[district].municipalities[concern.municipality] = 0
@@ -307,34 +308,37 @@ export const generateCategorySummaryPDF = async (
   yPos += 8
 
   // Status cards in a row
-  const statusCardWidth = (pageWidth - 2 * margin - 8) / 3
   const statusCardHeight = 28
 
   const statusData = [
     { label: 'Pending', count: pendingCount, color: [251, 191, 36], icon: '!' },
-    { label: 'In Progress', count: inProgressCount, color: [59, 130, 246], icon: '~' },
+    { label: 'Under Action', count: inProgressCount, color: [59, 130, 246], icon: '~' },
     { label: 'Completed', count: completedCount, color: [34, 197, 94], icon: '+' },
+    ...(unlocatedCount > 0 ? [{ label: 'Unlocated', count: unlocatedCount, color: [156, 163, 175] as [number, number, number], icon: '?' }] : []),
   ]
 
+  const statusCardCount = statusData.length
+  const statusCardWidth2 = (pageWidth - 2 * margin - (statusCardCount > 3 ? 12 : 8)) / statusCardCount
+
   statusData.forEach((status, index) => {
-    const xPos = margin + index * (statusCardWidth + 4)
+    const xPos = margin + index * (statusCardWidth2 + 4)
     const percentage = totalConcerns > 0 ? Math.round((status.count / totalConcerns) * 100) : 0
     
     doc.setFillColor(status.color[0], status.color[1], status.color[2])
     doc.setDrawColor(status.color[0] - 20, status.color[1] - 20, status.color[2] - 20)
     doc.setLineWidth(0.5)
-    doc.roundedRect(xPos, yPos, statusCardWidth, statusCardHeight, 2, 2, 'FD')
+    doc.roundedRect(xPos, yPos, statusCardWidth2, statusCardHeight, 2, 2, 'FD')
     
     doc.setFontSize(8)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(255, 255, 255)
-    doc.text(status.label.toUpperCase(), xPos + statusCardWidth / 2, yPos + 7, { align: 'center' })
+    doc.text(status.label.toUpperCase(), xPos + statusCardWidth2 / 2, yPos + 7, { align: 'center' })
     
     doc.setFontSize(20)
-    doc.text(status.count.toString(), xPos + statusCardWidth / 2, yPos + 18, { align: 'center' })
+    doc.text(status.count.toString(), xPos + statusCardWidth2 / 2, yPos + 18, { align: 'center' })
     
     doc.setFontSize(7)
-    doc.text(`${percentage}% of total`, xPos + statusCardWidth / 2, yPos + 24, { align: 'center' })
+    doc.text(`${percentage}% of total`, xPos + statusCardWidth2 / 2, yPos + 24, { align: 'center' })
   })
 
   yPos += statusCardHeight + 12
@@ -677,18 +681,21 @@ export const generateCategorySummaryPDF = async (
     // District statistics cards
     const districtTotal = districtConcerns.length
     const districtPending = districtConcerns.filter(c => c.status === 'pending').length
-    const districtInProgress = districtConcerns.filter(c => c.status === 'in-progress').length
-    const districtCompleted = districtConcerns.filter(c => c.status === 'completed').length
+    const districtInProgress = districtConcerns.filter(c => c.status === 'in-progress' || c.status === 'under-action').length
+    const districtCompleted = districtConcerns.filter(c => c.status === 'completed' || c.status === 'closed' || c.status === 'resolved').length
+    const districtUnlocated = districtConcerns.filter(c => c.status === 'unlocated').length
     const districtRate = districtTotal > 0 ? Math.round((districtCompleted / districtTotal) * 100) : 0
 
-    const districtCardWidth = (pageWidth - 2 * margin - 12) / 4
+    const districtCardCount = 4 + (districtUnlocated > 0 ? 1 : 0)
+    const districtCardWidth = (pageWidth - 2 * margin - 12) / districtCardCount
     const districtCardHeight = 25
 
     const districtCards = [
       { label: 'Total', value: districtTotal, color: [100, 116, 139] },
       { label: 'Pending', value: districtPending, color: [251, 191, 36] },
-      { label: 'In Progress', value: districtInProgress, color: [59, 130, 246] },
+      { label: 'Under Action', value: districtInProgress, color: [59, 130, 246] },
       { label: 'Completed', value: districtCompleted, color: [34, 197, 94] },
+      ...(districtUnlocated > 0 ? [{ label: 'Unlocated', value: districtUnlocated, color: [156, 163, 175] as [number, number, number] }] : []),
     ]
 
     districtCards.forEach((card, index) => {
@@ -775,15 +782,16 @@ export const generateCategorySummaryPDF = async (
     yPos = (doc as any).lastAutoTable.finalY + 12
 
     // Status tables
-    const statuses: Array<{ status: 'pending' | 'in-progress' | 'completed', label: string, headerColor: [number, number, number] }> = [
-      { status: 'pending', label: 'PENDING CONCERNS', headerColor: [251, 191, 36] },
-      { status: 'in-progress', label: 'IN-PROGRESS CONCERNS', headerColor: [59, 130, 246] },
-      { status: 'completed', label: 'COMPLETED CONCERNS', headerColor: [34, 197, 94] },
+    const statusConfigs: Array<{ statuses: string[], label: string, headerColor: [number, number, number] }> = [
+      { statuses: ['pending'], label: 'PENDING CONCERNS', headerColor: [251, 191, 36] },
+      { statuses: ['in-progress', 'under-action'], label: 'UNDER ACTION / IN PROGRESS', headerColor: [59, 130, 246] },
+      { statuses: ['completed', 'closed', 'resolved'], label: 'COMPLETED / CLOSED / RESOLVED', headerColor: [34, 197, 94] },
+      { statuses: ['unlocated'], label: 'UNLOCATED', headerColor: [156, 163, 175] },
     ]
 
-    statuses.forEach(({ status, label, headerColor }) => {
+    statusConfigs.forEach(({ statuses, label, headerColor }) => {
       const statusConcerns = districtConcerns
-        .filter(c => c.status === status)
+        .filter(c => statuses.includes(c.status))
         .sort((a, b) => {
           // Sort by municipality first, then by date
           const muniCompare = a.municipality.localeCompare(b.municipality)
@@ -853,7 +861,7 @@ export const generateCategorySummaryPDF = async (
     const summaryTableData = [
       ['Total Concerns', districtTotal.toString()],
       ['Pending', `${districtPending} (${districtTotal > 0 ? Math.round((districtPending / districtTotal) * 100) : 0}%)`],
-      ['In Progress', `${districtInProgress} (${districtTotal > 0 ? Math.round((districtInProgress / districtTotal) * 100) : 0}%)`],
+      ['Under Action', `${districtInProgress} (${districtTotal > 0 ? Math.round((districtInProgress / districtTotal) * 100) : 0}%)`],
       ['Completed', `${districtCompleted} (${districtTotal > 0 ? Math.round((districtCompleted / districtTotal) * 100) : 0}%)`],
       ['Completion Rate', `${districtRate}%`],
     ]

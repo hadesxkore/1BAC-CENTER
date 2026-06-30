@@ -68,7 +68,7 @@ import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import { UpdateStatusDialog } from '@/components/UpdateStatusDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, writeBatch, getDocs, where } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -178,6 +178,27 @@ export default function ActionCenter() {
     // Cleanup subscription on unmount
     return () => unsubscribe()
   }, []) // Empty dependency array - only run once
+
+  // One-time backfill: migrate in-progress → under-action
+  useEffect(() => {
+    const backfill = async () => {
+      try {
+        const q = query(collection(db, 'concerns'), where('status', '==', 'in-progress'))
+        const snapshot = await getDocs(q)
+        if (snapshot.empty) return
+
+        const batch = writeBatch(db)
+        snapshot.forEach((d) => {
+          batch.update(doc(db, 'concerns', d.id), { status: 'under-action' })
+        })
+        await batch.commit()
+        console.log(`Backfilled ${snapshot.size} in-progress → under-action`)
+      } catch (err) {
+        console.error('Backfill error:', err)
+      }
+    }
+    backfill()
+  }, [])
 
   const columns: ColumnDef<Action>[] = useMemo(() => [
     {
@@ -596,7 +617,13 @@ export default function ActionCenter() {
       }
       
       // Status filter
-      if (statusFilter !== 'all' && action.status !== statusFilter) return false
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'under-action') {
+          if (action.status !== 'under-action' && action.status !== 'in-progress') return false
+        } else {
+          if (action.status !== statusFilter) return false
+        }
+      }
       
       // Municipality filter
       if (municipalityFilter !== 'all' && action.municipality !== municipalityFilter) return false
@@ -665,24 +692,24 @@ export default function ActionCenter() {
     },
   })
 
-  // Stats with useMemo - split by category
+  // Stats with useMemo - split by category, based on filtered data
   const stats = useMemo(() => ({
-    total: concerns.length,
-    totalEnvironmental: concerns.filter((a) => a.category === 'environmental').length,
-    totalAgricultural: concerns.filter((a) => a.category === 'agricultural').length,
-    pending: concerns.filter((a) => a.status === 'pending').length,
-    pendingEnvironmental: concerns.filter((a) => a.status === 'pending' && a.category === 'environmental').length,
-    pendingAgricultural: concerns.filter((a) => a.status === 'pending' && a.category === 'agricultural').length,
-    underAction: concerns.filter((a) => a.status === 'in-progress' || a.status === 'under-action').length,
-    underActionEnvironmental: concerns.filter((a) => (a.status === 'in-progress' || a.status === 'under-action') && a.category === 'environmental').length,
-    underActionAgricultural: concerns.filter((a) => (a.status === 'in-progress' || a.status === 'under-action') && a.category === 'agricultural').length,
-    completed: concerns.filter((a) => a.status === 'completed' || a.status === 'closed' || a.status === 'resolved').length,
-    completedEnvironmental: concerns.filter((a) => (a.status === 'completed' || a.status === 'closed' || a.status === 'resolved') && a.category === 'environmental').length,
-    completedAgricultural: concerns.filter((a) => (a.status === 'completed' || a.status === 'closed' || a.status === 'resolved') && a.category === 'agricultural').length,
-    unlocated: concerns.filter((a) => a.status === 'unlocated').length,
-    unlocatedEnvironmental: concerns.filter((a) => a.status === 'unlocated' && a.category === 'environmental').length,
-    unlocatedAgricultural: concerns.filter((a) => a.status === 'unlocated' && a.category === 'agricultural').length,
-  }), [concerns])
+    total: filteredData.length,
+    totalEnvironmental: filteredData.filter((a) => a.category === 'environmental').length,
+    totalAgricultural: filteredData.filter((a) => a.category === 'agricultural').length,
+    pending: filteredData.filter((a) => a.status === 'pending').length,
+    pendingEnvironmental: filteredData.filter((a) => a.status === 'pending' && a.category === 'environmental').length,
+    pendingAgricultural: filteredData.filter((a) => a.status === 'pending' && a.category === 'agricultural').length,
+    underAction: filteredData.filter((a) => a.status === 'in-progress' || a.status === 'under-action').length,
+    underActionEnvironmental: filteredData.filter((a) => (a.status === 'in-progress' || a.status === 'under-action') && a.category === 'environmental').length,
+    underActionAgricultural: filteredData.filter((a) => (a.status === 'in-progress' || a.status === 'under-action') && a.category === 'agricultural').length,
+    completed: filteredData.filter((a) => a.status === 'completed' || a.status === 'closed' || a.status === 'resolved').length,
+    completedEnvironmental: filteredData.filter((a) => (a.status === 'completed' || a.status === 'closed' || a.status === 'resolved') && a.category === 'environmental').length,
+    completedAgricultural: filteredData.filter((a) => (a.status === 'completed' || a.status === 'closed' || a.status === 'resolved') && a.category === 'agricultural').length,
+    unlocated: filteredData.filter((a) => a.status === 'unlocated').length,
+    unlocatedEnvironmental: filteredData.filter((a) => a.status === 'unlocated' && a.category === 'environmental').length,
+    unlocatedAgricultural: filteredData.filter((a) => a.status === 'unlocated' && a.category === 'agricultural').length,
+  }), [filteredData])
 
   // Export filtered data as PDF with full details
   const exportFilteredPDF = async () => {

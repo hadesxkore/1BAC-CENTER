@@ -64,6 +64,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   const [uploadProgress, setUploadProgress] = useState(0)
   const [reportTitleSuggestions, setReportTitleSuggestions] = useState<string[]>(REPORT_TITLE_SUGGESTIONS)
   const [showAssignedTo, setShowAssignedTo] = useState(false)
+  const [skipAutoMunicipality, setSkipAutoMunicipality] = useState(false)
   const { user } = useAppStore()
   
   // Form fields
@@ -82,8 +83,29 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   useEffect(() => {
     if (open) {
       loadReportTitles()
+      setSkipAutoMunicipality(false)
     }
   }, [open, collectionName])
+
+  // Auto-detect municipality from location address
+  useEffect(() => {
+    if (!location || skipAutoMunicipality) return
+    const loc = location.toLowerCase()
+    const words = loc.split(/[\s,]+/)
+    const found = BATAAN_MUNICIPALITIES.find((m) => {
+      const mLower = m.toLowerCase()
+      if (loc.includes(mLower)) return true
+      const mWords = mLower.split(/[\s,]+/)
+      return mWords.some((w) => words.includes(w))
+    })
+    if (found) {
+      setMunicipality(found)
+      if (category === 'agricultural') {
+        const municipalityName = found.replace(' City', '').toUpperCase()
+        setAssignedTo(`AGRI-${municipalityName}`)
+      }
+    }
+  }, [location, skipAutoMunicipality, category])
 
   const loadReportTitles = async () => {
     try {
@@ -133,6 +155,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
   }
 
   const handleMunicipalityChange = (value: string) => {
+    setSkipAutoMunicipality(true)
     setMunicipality(value)
     if (category === 'agricultural') {
       const municipalityName = value.replace(' City', '').toUpperCase()
@@ -205,6 +228,11 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
     
     if (!dateReported) {
       toast.error('Please select date reported')
+      return
+    }
+
+    if (!municipality) {
+      toast.error('Please select municipality')
       return
     }
     
@@ -444,7 +472,7 @@ export function AddConcernDialog({ collectionName = 'concerns' }: AddConcernDial
                   <Label htmlFor="location">Complete Location Address *</Label>
                   <Input
                     id="location"
-                    placeholder="Brgy., Street, Municipality, Province"
+                    placeholder="Brgy., Street, Municipality, Province (e.g. Brgy. Tuyo, Balanga City)"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     required

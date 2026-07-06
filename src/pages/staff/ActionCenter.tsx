@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import type {
   ColumnDef,
@@ -64,11 +64,13 @@ import { SubmitActionDialog } from '@/components/SubmitActionDialog'
 import { ViewConcernDialog } from '@/components/ViewConcernDialog'
 import { EditConcernDialog } from '@/components/EditConcernDialog'
 import { DeleteConcernDialog } from '@/components/DeleteConcernDialog'
+import CoordinatesDialog from '@/components/CoordinatesDialog'
 import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import { UpdateStatusDialog } from '@/components/UpdateStatusDialog'
+import ExportPDFDialog from '@/components/ExportPDFDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { db } from '@/config/firebase'
-import { collection, query, orderBy, onSnapshot, Timestamp, doc, writeBatch, getDocs, where } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, writeBatch, getDocs, where, setDoc } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -134,6 +136,9 @@ export default function ActionCenter() {
   const [carouselImages, setCarouselImages] = useState<Array<{ url: string; caption?: string }>>([])
   const [carouselTitle, setCarouselTitle] = useState('')
   const [showCarousel, setShowCarousel] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
+  const [pendingCoordsRow, setPendingCoordsRow] = useState<Action | null>(null)
 
   // Real-time listener for concerns
   useEffect(() => {
@@ -156,6 +161,7 @@ export default function ActionCenter() {
           reportTitle: data.reportTitle,
           caseRemarks: data.caseRemarks,
           location: data.location,
+          coordinates: data.coordinates || undefined,
           concernPhotos: data.concernPhotos || [],
           answeredBy: data.answeredBy,
           actionTaken: data.actionTaken,
@@ -201,6 +207,39 @@ export default function ActionCenter() {
   }, [])
 
   const columns: ColumnDef<Action>[] = useMemo(() => [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <div className="flex items-center justify-center w-8">
+          <input
+            type="checkbox"
+            className="w-3.5 h-3.5 cursor-pointer accent-[#1a3a6b]"
+            checked={table.getIsAllRowsSelected()}
+            onChange={table.getToggleAllRowsSelectedHandler()}
+          />
+        </div>
+      ),
+      cell: ({ row }) => {
+        const hasCoords = !!row.original.coordinates
+        return (
+          <div className="flex items-center justify-center w-8">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 cursor-pointer accent-[#1a3a6b]"
+              checked={row.getIsSelected()}
+              onChange={() => {
+                if (!hasCoords && !row.getIsSelected()) {
+                  setPendingCoordsRow(row.original)
+                } else {
+                  row.toggleSelected()
+                }
+              }}
+            />
+          </div>
+        )
+      },
+      enableSorting: false,
+    },
     {
       accessorKey: 'dateUploaded',
       header: ({ column }) => {
@@ -680,6 +719,8 @@ export default function ActionCenter() {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.id,
     initialState: {
       pagination: {
         pageSize: 10, // Show 10 rows per page
@@ -689,6 +730,7 @@ export default function ActionCenter() {
       sorting,
       columnFilters,
       columnVisibility,
+      rowSelection,
     },
   })
 
@@ -711,266 +753,326 @@ export default function ActionCenter() {
     unlocatedAgricultural: filteredData.filter((a) => a.status === 'unlocated' && a.category === 'agricultural').length,
   }), [filteredData])
 
-  // Export filtered data as PDF with full details
-  const exportFilteredPDF = async () => {
-    if (filteredData.length === 0) {
-      toast.error('No data to export')
+  // Export PDF with row selection, status filter, and date range
+  const selectedCount = Object.keys(rowSelection).length
+
+  const handleExportWithFilter = async (
+    selectedStatuses: string[],
+    dateFrom?: Date,
+    dateTo?: Date
+  ) => {
+    // Start with selected rows, or all filtered data if none selected
+    let dataToExport = selectedCount > 0
+      ? filteredData.filter((item) => rowSelection[item.id])
+      : filteredData
+
+    // Filter by date range (based on dateReported)
+    if (dateFrom || dateTo) {
+      dataToExport = dataToExport.filter((item) => {
+        const d = new Date(item.dateReported)
+        if (dateFrom && d < dateFrom) return false
+        if (dateTo) {
+          const endOfDay = new Date(dateTo)
+          endOfDay.setHours(23, 59, 59, 999)
+          if (d > endOfDay) return false
+        }
+        return true
+      })
+    }
+
+    // Filter by status groups
+    if (!selectedStatuses.includes('all')) {
+      dataToExport = dataToExport.filter((item) => {
+        if (selectedStatuses.includes('pending') && item.status === 'pending') return true
+        if (selectedStatuses.includes('under-action') && (item.status === 'in-progress' || item.status === 'under-action')) return true
+        if (selectedStatuses.includes('completed') && (item.status === 'completed' || item.status === 'closed' || item.status === 'resolved')) return true
+        if (selectedStatuses.includes('unlocated') && item.status === 'unlocated') return true
+        return false
+      })
+    }
+
+    if (dataToExport.length === 0) {
+      toast.error('No data matches the selected filters')
       return
     }
 
     toast.info('Generating PDF... This may take a moment.')
+    await generateFormalPDF(dataToExport)
+  }
 
-    const doc = new jsPDF('p', 'mm', 'a4')
+  const generateFormalPDF = async (data: Action[]) => {
+    const doc = new jsPDF('l', 'mm', 'a4')
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
-    const margin = 14
-    let yPosition = 20
+    const margin = 12
+    const contentWidth = pageWidth - 2 * margin
+    const colGap = 10
+    const colW = (contentWidth - colGap) / 2
+    const fieldX = margin + 2
+    const fieldW = contentWidth - 4
+    let y = margin
+    let pageNum = 1
 
-    // Header
-    doc.setFontSize(18)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Action Center - Detailed Report', margin, yPosition)
-    
-    yPosition += 8
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(100, 100, 100)
-    doc.text(`Generated: ${format(new Date(), 'MMM dd, yyyy HH:mm')}`, margin, yPosition)
-    doc.text(`Total Records: ${filteredData.length}`, pageWidth - margin - 30, yPosition)
-    
-    yPosition += 10
-    doc.setTextColor(0, 0, 0)
-
-    // Process each concern
-    for (let i = 0; i < filteredData.length; i++) {
-      const item = filteredData[i]
-      
-      // Check if we need a new page
-      if (yPosition > pageHeight - 60) {
-        doc.addPage()
-        yPosition = 20
-      }
-
-      // Concern box
-      doc.setDrawColor(200, 200, 200)
-      doc.setFillColor(249, 250, 251)
-      doc.roundedRect(margin, yPosition, pageWidth - 2 * margin, 10, 2, 2, 'FD')
-      
-      // Concern number and status
-      doc.setFontSize(11)
-      doc.setFont('helvetica', 'bold')
-      doc.text(`Concern #${i + 1}`, margin + 3, yPosition + 6)
-      
-      // Status badge
-      const statusX = pageWidth - margin - 25
-      if (item.status === 'completed') {
-        doc.setFillColor(220, 252, 231)
-        doc.setTextColor(22, 163, 74)
-      } else {
-        doc.setFillColor(254, 249, 195)
-        doc.setTextColor(161, 98, 7)
-      }
-      doc.roundedRect(statusX, yPosition + 2, 22, 6, 1, 1, 'F')
-      doc.setFontSize(8)
-      doc.text(item.status.toUpperCase(), statusX + 11, yPosition + 6, { align: 'center' })
-      
-      yPosition += 15
-      doc.setTextColor(0, 0, 0)
+    const addFooter = () => {
+      doc.setFontSize(7)
+      doc.setTextColor(150, 150, 150)
       doc.setFont('helvetica', 'normal')
-
-      // Details in two columns
-      doc.setFontSize(9)
-      const col1X = margin + 3
-      const col2X = pageWidth / 2 + 5
-      const lineHeight = 5
-
-      // Column 1
-      doc.setFont('helvetica', 'bold')
-      doc.text('Date Reported:', col1X, yPosition)
-      doc.setFont('helvetica', 'normal')
-      doc.text(format(new Date(item.dateReported), 'MMM dd, yyyy'), col1X + 30, yPosition)
-      
-      yPosition += lineHeight
-      doc.setFont('helvetica', 'bold')
-      doc.text('Municipality:', col1X, yPosition)
-      doc.setFont('helvetica', 'normal')
-      doc.text(item.municipality, col1X + 30, yPosition)
-      
-      yPosition += lineHeight
-      doc.setFont('helvetica', 'bold')
-      doc.text('Category:', col1X, yPosition)
-      doc.setFont('helvetica', 'normal')
-      doc.text(item.category, col1X + 30, yPosition)
-
-      // Column 2
-      yPosition -= lineHeight * 2
-      doc.setFont('helvetica', 'bold')
-      doc.text('Answered By:', col2X, yPosition)
-      doc.setFont('helvetica', 'normal')
-      doc.text(item.answeredBy, col2X + 30, yPosition)
-      
-      yPosition += lineHeight
-      doc.setFont('helvetica', 'bold')
-      doc.text('Action Date:', col2X, yPosition)
-      doc.setFont('helvetica', 'normal')
-      // Handle action date - could be "Ongoing", null, or a valid date
-      let actionDateText = 'N/A'
-      if (item.actionDate) {
-        if (item.actionDate === 'Ongoing') {
-          actionDateText = 'Ongoing'
-        } else {
-          try {
-            const actionDate = new Date(item.actionDate)
-            if (!isNaN(actionDate.getTime())) {
-              actionDateText = format(actionDate, 'MMM dd, yyyy')
-            }
-          } catch (e) {
-            actionDateText = 'N/A'
-          }
-        }
-      }
-      doc.text(actionDateText, col2X + 30, yPosition)
-
-      yPosition += lineHeight * 2
-
-      // Report Title
-      doc.setFont('helvetica', 'bold')
-      doc.text('Report Title:', col1X, yPosition)
-      yPosition += 4
-      doc.setFont('helvetica', 'normal')
-      const titleLines = doc.splitTextToSize(item.reportTitle, pageWidth - 2 * margin - 6)
-      doc.text(titleLines, col1X, yPosition)
-      yPosition += titleLines.length * 4
-
-      // Location
-      doc.setFont('helvetica', 'bold')
-      doc.text('Location:', col1X, yPosition)
-      yPosition += 4
-      doc.setFont('helvetica', 'normal')
-      const locationLines = doc.splitTextToSize(item.location, pageWidth - 2 * margin - 6)
-      doc.text(locationLines, col1X, yPosition)
-      yPosition += locationLines.length * 4
-
-      // Case Remarks
-      if (item.caseRemarks) {
-        doc.setFont('helvetica', 'bold')
-        doc.text('Remarks:', col1X, yPosition)
-        yPosition += 4
-        doc.setFont('helvetica', 'normal')
-        const remarksLines = doc.splitTextToSize(item.caseRemarks, pageWidth - 2 * margin - 6)
-        doc.text(remarksLines, col1X, yPosition)
-        yPosition += remarksLines.length * 4
-      }
-
-      // Images section
-      yPosition += 3
-
-      // Concern Photos
-      if (item.concernPhotos && item.concernPhotos.length > 0) {
-        // Check if we need a new page for images
-        if (yPosition > pageHeight - 50) {
-          doc.addPage()
-          yPosition = 20
-        }
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.text(`Concern Photos (${item.concernPhotos.length}):`, col1X, yPosition)
-        yPosition += 5
-
-        try {
-          const imgWidth = 35
-          const imgHeight = 35
-          const imgsPerRow = 4
-          const imgSpacing = 3
-
-          for (let j = 0; j < Math.min(item.concernPhotos.length, 4); j++) {
-            const xPos = col1X + (j % imgsPerRow) * (imgWidth + imgSpacing)
-            const yPos = yPosition + Math.floor(j / imgsPerRow) * (imgHeight + imgSpacing)
-
-            // Check if we need a new page
-            if (yPos + imgHeight > pageHeight - margin) {
-              doc.addPage()
-              yPosition = 20
-            }
-
-            try {
-              doc.addImage(item.concernPhotos[j].url, 'JPEG', xPos, yPos, imgWidth, imgHeight)
-            } catch (err) {
-              // If image fails, draw a placeholder
-              doc.setDrawColor(200, 200, 200)
-              doc.rect(xPos, yPos, imgWidth, imgHeight)
-              doc.setFontSize(7)
-              doc.text('Image', xPos + imgWidth / 2, yPos + imgHeight / 2, { align: 'center' })
-            }
-          }
-          yPosition += Math.ceil(Math.min(item.concernPhotos.length, 4) / imgsPerRow) * (imgHeight + imgSpacing) + 5
-        } catch (error) {
-          console.error('Error adding concern photos:', error)
-          yPosition += 5
-        }
-      }
-
-      // Action Taken Photos
-      if (item.actionTaken && item.actionTaken.photos && item.actionTaken.photos.length > 0) {
-        // Check if we need a new page for images
-        if (yPosition > pageHeight - 50) {
-          doc.addPage()
-          yPosition = 20
-        }
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.text(`Action Taken Photos (${item.actionTaken.photos.length}):`, col1X, yPosition)
-        yPosition += 5
-
-        try {
-          const imgWidth = 35
-          const imgHeight = 35
-          const imgsPerRow = 4
-          const imgSpacing = 3
-
-          for (let j = 0; j < Math.min(item.actionTaken.photos.length, 4); j++) {
-            const xPos = col1X + (j % imgsPerRow) * (imgWidth + imgSpacing)
-            const yPos = yPosition + Math.floor(j / imgsPerRow) * (imgHeight + imgSpacing)
-
-            // Check if we need a new page
-            if (yPos + imgHeight > pageHeight - margin) {
-              doc.addPage()
-              yPosition = 20
-            }
-
-            try {
-              doc.addImage(item.actionTaken.photos[j].url, 'JPEG', xPos, yPos, imgWidth, imgHeight)
-            } catch (err) {
-              // If image fails, draw a placeholder
-              doc.setDrawColor(200, 200, 200)
-              doc.rect(xPos, yPos, imgWidth, imgHeight)
-              doc.setFontSize(7)
-              doc.text('Image', xPos + imgWidth / 2, yPos + imgHeight / 2, { align: 'center' })
-            }
-          }
-          yPosition += Math.ceil(Math.min(item.actionTaken.photos.length, 4) / imgsPerRow) * (imgHeight + imgSpacing) + 5
-        } catch (error) {
-          console.error('Error adding action photos:', error)
-          yPosition += 5
-        }
-
-        // Action notes
-        if (item.actionTaken.notes) {
-          doc.setFont('helvetica', 'bold')
-          doc.text('Action Notes:', col1X, yPosition)
-          yPosition += 4
-          doc.setFont('helvetica', 'normal')
-          const notesLines = doc.splitTextToSize(item.actionTaken.notes, pageWidth - 2 * margin - 6)
-          doc.text(notesLines, col1X, yPosition)
-          yPosition += notesLines.length * 4
-        }
-      }
-
-      yPosition += 8
+      doc.text(
+        `1BAC Action Center - Official Report | Page ${pageNum}`,
+        margin,
+        pageHeight - 8
+      )
+      doc.text(
+        `Generated ${format(new Date(), 'MMM dd, yyyy HH:mm')}`,
+        pageWidth - margin,
+        pageHeight - 8,
+        { align: 'right' }
+      )
     }
 
+    const addHeader = () => {
+      doc.setDrawColor(26, 58, 107)
+      doc.setFillColor(26, 58, 107)
+      doc.roundedRect(margin, y, contentWidth, 9, 1.5, 1.5, 'F')
+      doc.setFontSize(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(255, 255, 255)
+      doc.text('ACTION CENTER', margin + 5, y + 6)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(220, 225, 240)
+      doc.text('Detailed Concern Report', margin + 75, y + 6)
+      y += 13
+      doc.setDrawColor(220, 220, 220)
+      doc.setFillColor(245, 246, 250)
+      doc.roundedRect(margin, y, contentWidth, 10, 1.5, 1.5, 'FD')
+      doc.setFontSize(8.5)
+      doc.setTextColor(60, 60, 60)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Report Date:', margin + 4, y + 6)
+      doc.setFont('helvetica', 'normal')
+      doc.text(format(new Date(), 'MMMM dd, yyyy'), margin + 20, y + 6)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Total Records:', pageWidth / 3, y + 6)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${data.length}`, pageWidth / 3 + 20, y + 6)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Reference:', (pageWidth / 3) * 2, y + 6)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`1BAC-ACT-${format(new Date(), 'yyMMdd')}`, (pageWidth / 3) * 2 + 16, y + 6)
+      y += 16
+    }
+
+    const needsPage = (needed: number) => {
+      if (y + needed > pageHeight - 12) {
+        addFooter()
+        doc.addPage()
+        pageNum++
+        y = margin
+        addHeader()
+        return true
+      }
+      return false
+    }
+
+    addHeader()
+
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i]
+
+      // ── Section accent bar (left edge) ──
+      const sectionTop = y
+
+      // Section header
+      if (needsPage(12)) {}
+      doc.setDrawColor(26, 58, 107)
+      doc.setFillColor(26, 58, 107)
+      doc.roundedRect(margin, y, contentWidth, 8, 1.5, 1.5, 'F')
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(255, 255, 255)
+      doc.text(`CONCERN REPORT #${i + 1}`, margin + 5, y + 5)
+
+      const sLabel = STATUS_LABELS[item.status] || item.status
+      const badgeColors: Record<string, [number, number, number]> = {
+        pending: [250, 204, 21], 'in-progress': [251, 146, 60],
+        'under-action': [251, 146, 60], completed: [34, 197, 94],
+        closed: [100, 100, 100], resolved: [34, 197, 94],
+        unlocated: [156, 163, 175],
+      }
+      const bc = badgeColors[item.status] || [100, 100, 100]
+      doc.setFillColor(bc[0], bc[1], bc[2])
+      doc.roundedRect(pageWidth - margin - 32, y + 1.5, 28, 5, 1, 1, 'F')
+      doc.setFontSize(7.5)
+      doc.setTextColor(255, 255, 255)
+      doc.setFont('helvetica', 'bold')
+      doc.text(sLabel.toUpperCase(), pageWidth - margin - 18, y + 5, { align: 'center' })
+      doc.setTextColor(50, 50, 50)
+
+      y += 13
+
+      // ── Field row: 3 core fields in one line ──
+      if (needsPage(10)) {}
+      const fY = y + 3.5
+      const fS = 9.5
+      doc.setFontSize(fS)
+
+      const row = (label: string, val: string, x: number, valOffset = 25) => {
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(80, 80, 80)
+        doc.text(label, x, fY)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(30, 30, 30)
+        doc.text(val || 'N/A', x + valOffset, fY)
+      }
+
+      row('Date Reported', format(new Date(item.dateReported), 'MMM dd, yyyy'), margin + 2)
+      row('Municipality', item.municipality, margin + 72)
+      row('Category', item.category, margin + 138)
+      if (item.coordinates) {
+        const coordStr = `${item.coordinates.lat.toFixed(4)}, ${item.coordinates.lng.toFixed(4)}`
+        row('Coord', coordStr, margin + 200, 16)
+      }
+      y += 9
+
+      // Field separator line
+      doc.setDrawColor(235, 235, 235)
+      doc.line(margin + 2, y, pageWidth - margin - 2, y)
+      y += 3
+
+      // ── Report Title ──
+      if (needsPage(12)) {}
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 80)
+      doc.text('Report Title', margin + 2, y)
+      y += 3.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9.5)
+      doc.setTextColor(30, 30, 30)
+      const tLines = doc.splitTextToSize(item.reportTitle, fieldW)
+      doc.text(tLines, margin + 2, y)
+      y += tLines.length * 4 + 2
+
+      // ── Location ──
+      if (needsPage(12)) {}
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 80)
+      doc.text('Location', margin + 2, y)
+      y += 3.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9.5)
+      doc.setTextColor(30, 30, 30)
+      const lLines = doc.splitTextToSize(item.location, fieldW)
+      doc.text(lLines, margin + 2, y)
+      y += lLines.length * 4 + 2
+
+      // ── Remarks ──
+      if (item.caseRemarks) {
+        if (needsPage(12)) {}
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(80, 80, 80)
+        doc.text('Remarks', margin + 2, y)
+        y += 3.5
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9.5)
+        doc.setTextColor(30, 30, 30)
+        const rLines = doc.splitTextToSize(item.caseRemarks, fieldW)
+        doc.text(rLines, margin + 2, y)
+        y += rLines.length * 4 + 2
+      }
+
+      // ── Action Notes ──
+      if (item.actionTaken?.notes) {
+        if (needsPage(12)) {}
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(26, 58, 107)
+        doc.text('Action Notes', margin + 2, y)
+        y += 3.5
+        doc.setDrawColor(220, 220, 220)
+        doc.line(margin + 2, y, pageWidth - margin - 2, y)
+        y += 4
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9.5)
+        doc.setTextColor(30, 30, 30)
+        const nLines = doc.splitTextToSize(item.actionTaken.notes, fieldW)
+        doc.text(nLines, margin + 2, y)
+        y += nLines.length * 4 + 2
+      }
+
+      // ── Supporting Photographs ──
+      const allImgs: Array<{ url: string; label: string }> = []
+      if (item.concernPhotos?.length) {
+        item.concernPhotos.slice(0, 6).forEach((p) => allImgs.push({ url: p.url, label: 'Concern Photo' }))
+      }
+      if (item.actionTaken?.photos?.length) {
+        item.actionTaken.photos.slice(0, 6).forEach((p) => allImgs.push({ url: p.url, label: 'Action Photo' }))
+      }
+
+      if (allImgs.length > 0) {
+        const imgW = 72
+        const imgH = 54
+        const perRow = Math.min(Math.floor((contentWidth - 10) / (imgW + 6)), 4)
+        const gap = (contentWidth - 10 - perRow * imgW) / (perRow - 1 || 1)
+        const rows = Math.ceil(Math.min(allImgs.length, 6) / perRow)
+        const imgBlockH = rows * (imgH + 10) + 10
+
+        if (needsPage(imgBlockH)) {}
+
+        y += 2
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(26, 58, 107)
+        doc.text('Supporting Photographs', margin + 2, y)
+        y += 3.5
+        doc.setDrawColor(220, 220, 220)
+        doc.line(margin + 2, y, pageWidth - margin - 2, y)
+        y += 5
+
+        const max = Math.min(allImgs.length, 6)
+        for (let j = 0; j < max; j++) {
+          const c = j % perRow
+          const r = Math.floor(j / perRow)
+          const xPos = margin + 5 + c * (imgW + gap)
+          const yPos = y + r * (imgH + 10)
+
+          doc.setDrawColor(200, 200, 200)
+          doc.setFillColor(248, 248, 248)
+          doc.roundedRect(xPos - 1, yPos - 1, imgW + 2, imgH + 2, 1.5, 1.5, 'FD')
+
+          try {
+            doc.addImage(allImgs[j].url, 'JPEG', xPos, yPos, imgW, imgH)
+          } catch (_) {
+            doc.setDrawColor(200, 200, 200)
+            doc.rect(xPos, yPos, imgW, imgH)
+            doc.setFontSize(7)
+            doc.setTextColor(160, 160, 160)
+            doc.text('Unavailable', xPos + imgW / 2, yPos + imgH / 2, { align: 'center' })
+          }
+
+          doc.setFontSize(6.5)
+          doc.setTextColor(120, 120, 120)
+          doc.setFont('helvetica', 'normal')
+          doc.text(`${allImgs[j].label} ${j + 1}`, xPos + imgW / 2, yPos + imgH + 4.5, { align: 'center' })
+        }
+
+        y += rows * (imgH + 10) + 2
+      }
+
+      // ── Entry separator ──
+      y += 3
+      if (i < data.length - 1) {
+        doc.setDrawColor(200, 200, 200)
+        doc.setFillColor(200, 200, 200)
+        doc.rect(margin, y, contentWidth, 0.5, 'F')
+        y += 5
+      }
+    }
+
+    addFooter()
     doc.save(`action-center-detailed-${format(new Date(), 'yyyy-MM-dd')}.pdf`)
     toast.success('PDF exported successfully!')
   }
@@ -1242,13 +1344,48 @@ export default function ActionCenter() {
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                       Clear All
                     </Button>
-                    <Button variant="outline" size="sm" onClick={exportFilteredPDF}>
+                    <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)}>
                       <HugeiconsIcon icon={Download01Icon} className="w-4 h-4 mr-2" />
-                      Export ({filteredData.length})
+                      Export {selectedCount > 0 ? `(${selectedCount} selected)` : `(${filteredData.length})`}
                     </Button>
                   </div>
                 </div>
                 
+                <ExportPDFDialog
+                  open={showExportDialog}
+                  onOpenChange={setShowExportDialog}
+                  totalCount={selectedCount > 0 ? selectedCount : filteredData.length}
+                  onExport={handleExportWithFilter}
+                />
+
+                <CoordinatesDialog
+                  open={!!pendingCoordsRow}
+                  onOpenChange={(open) => {
+                    if (!open) setPendingCoordsRow(null)
+                  }}
+                  location={pendingCoordsRow?.location || ''}
+                  reportTitle={pendingCoordsRow?.reportTitle || ''}
+                  onSave={async (lat, lng) => {
+                    if (!pendingCoordsRow) return
+                    const rowId = pendingCoordsRow.id
+                    try {
+                      await setDoc(doc(db, 'concerns', rowId), { coordinates: { lat, lng } }, { merge: true })
+                      setConcerns((prev) =>
+                        prev.map((c) =>
+                          c.id === rowId ? { ...c, coordinates: { lat, lng } } : c
+                        )
+                      )
+                      rowSelection[rowId] = true
+                      setRowSelection({ ...rowSelection })
+                      toast.success('Coordinates saved')
+                    } catch (err) {
+                      toast.error('Failed to save coordinates')
+                      console.error(err)
+                    }
+                    setPendingCoordsRow(null)
+                  }}
+                />
+
                 <CollapsibleContent className="mt-4 space-y-4">
                   {/* Date Range */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

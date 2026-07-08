@@ -10,13 +10,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface CoordinatesDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   location: string
   reportTitle: string
-  onSave: (lat: number, lng: number) => void
+  onSave: (coordText?: string) => void
 }
 
 export default function CoordinatesDialog({
@@ -26,36 +27,24 @@ export default function CoordinatesDialog({
   reportTitle,
   onSave,
 }: CoordinatesDialogProps) {
-  const [lat, setLat] = useState('')
-  const [lng, setLng] = useState('')
-  const [error, setError] = useState('')
+  const [coordText, setCoordText] = useState('')
+  const [noCoords, setNoCoords] = useState(false)
 
   const handleOpenChange = (val: boolean) => {
     if (!val) {
-      setLat('')
-      setLng('')
-      setError('')
+      setCoordText('')
+      setNoCoords(false)
     }
     onOpenChange(val)
   }
 
   const handleSave = () => {
-    const latNum = parseFloat(lat)
-    const lngNum = parseFloat(lng)
-    if (isNaN(latNum) || isNaN(lngNum)) {
-      setError('Enter valid numeric coordinates')
+    if (noCoords) {
+      onSave()
+      handleOpenChange(false)
       return
     }
-    if (latNum < -90 || latNum > 90) {
-      setError('Latitude must be between -90 and 90')
-      return
-    }
-    if (lngNum < -180 || lngNum > 180) {
-      setError('Longitude must be between -180 and 180')
-      return
-    }
-    setError('')
-    onSave(latNum, lngNum)
+    onSave(coordText.trim())
     handleOpenChange(false)
   }
 
@@ -63,38 +52,42 @@ export default function CoordinatesDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Add Location Coordinates</DialogTitle>
+          <DialogTitle>Location Coordinates</DialogTitle>
           <DialogDescription className="space-y-1">
             <div className="line-clamp-2">{location}</div>
             <div className="italic opacity-70 line-clamp-1">{reportTitle}</div>
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-3 py-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Latitude</Label>
-            <Input
-              value={lat}
-              onChange={(e) => setLat(e.target.value)}
-              placeholder="14.6760"
-              className="h-9"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Longitude</Label>
-            <Input
-              value={lng}
-              onChange={(e) => setLng(e.target.value)}
-              placeholder="120.9762"
-              className="h-9"
-            />
-          </div>
+        <div className="py-2">
+          <Label className="text-xs">Coordinates</Label>
+          <Input
+            value={coordText}
+            onChange={(e) => setCoordText(e.target.value)}
+            placeholder={`14°35'08.1"N 120°35'18.7"E`}
+            className="h-9 mt-1.5"
+            disabled={noCoords}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Enter coordinates in any format (decimal, DMS, etc.)
+          </p>
         </div>
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        <div className="flex items-center gap-2 -mt-1">
+          <Checkbox
+            id="no-coords"
+            checked={noCoords}
+            onCheckedChange={(checked) => setNoCoords(checked === true)}
+          />
+          <Label htmlFor="no-coords" className="text-xs cursor-pointer">
+            No coordinates available
+          </Label>
+        </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            Skip
+            Cancel
           </Button>
-          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={handleSave}>
+            {noCoords ? 'Confirm' : 'Save'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

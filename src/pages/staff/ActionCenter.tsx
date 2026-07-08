@@ -161,7 +161,9 @@ export default function ActionCenter() {
           reportTitle: data.reportTitle,
           caseRemarks: data.caseRemarks,
           location: data.location,
-          coordinates: data.coordinates || undefined,
+          coordinates: typeof data.coordinates === 'object' && data.coordinates !== null
+            ? `${data.coordinates.lat ?? ''}, ${data.coordinates.lng ?? ''}`
+            : (data.coordinates || undefined),
           concernPhotos: data.concernPhotos || [],
           answeredBy: data.answeredBy,
           actionTaken: data.actionTaken,
@@ -880,8 +882,14 @@ export default function ActionCenter() {
     for (let i = 0; i < data.length; i++) {
       const item = data[i]
 
-      // ── Section accent bar (left edge) ──
-      const sectionTop = y
+      // Each concern gets its own page
+      if (i > 0) {
+        addFooter()
+        doc.addPage()
+        pageNum++
+        y = margin
+        addHeader()
+      }
 
       // Section header
       if (needsPage(12)) {}
@@ -930,8 +938,8 @@ export default function ActionCenter() {
       row('Municipality', item.municipality, margin + 72)
       row('Category', item.category, margin + 138)
       if (item.coordinates) {
-        const coordStr = `${item.coordinates.lat.toFixed(4)}, ${item.coordinates.lng.toFixed(4)}`
-        row('Coord', coordStr, margin + 200, 16)
+        const coordVal = typeof item.coordinates === 'object' ? `${item.coordinates.lat?.toFixed?.(4) ?? ''}, ${item.coordinates.lng?.toFixed?.(4) ?? ''}` : item.coordinates
+        if (coordVal) row('Coord', coordVal, margin + 200, 16)
       }
       y += 9
 
@@ -1062,14 +1070,7 @@ export default function ActionCenter() {
         y += rows * (imgH + 10) + 2
       }
 
-      // ── Entry separator ──
-      y += 3
-      if (i < data.length - 1) {
-        doc.setDrawColor(200, 200, 200)
-        doc.setFillColor(200, 200, 200)
-        doc.rect(margin, y, contentWidth, 0.5, 'F')
-        y += 5
-      }
+      y += 4
     }
 
     addFooter()
@@ -1365,23 +1366,25 @@ export default function ActionCenter() {
                   }}
                   location={pendingCoordsRow?.location || ''}
                   reportTitle={pendingCoordsRow?.reportTitle || ''}
-                  onSave={async (lat, lng) => {
+                  onSave={async (coordText) => {
                     if (!pendingCoordsRow) return
                     const rowId = pendingCoordsRow.id
-                    try {
-                      await setDoc(doc(db, 'concerns', rowId), { coordinates: { lat, lng } }, { merge: true })
-                      setConcerns((prev) =>
-                        prev.map((c) =>
-                          c.id === rowId ? { ...c, coordinates: { lat, lng } } : c
+                    if (coordText !== undefined) {
+                      try {
+                        await setDoc(doc(db, 'concerns', rowId), { coordinates: coordText }, { merge: true })
+                        setConcerns((prev) =>
+                          prev.map((c) =>
+                            c.id === rowId ? { ...c, coordinates: coordText } : c
+                          )
                         )
-                      )
-                      rowSelection[rowId] = true
-                      setRowSelection({ ...rowSelection })
-                      toast.success('Coordinates saved')
-                    } catch (err) {
-                      toast.error('Failed to save coordinates')
-                      console.error(err)
+                        toast.success('Coordinates saved')
+                      } catch (err) {
+                        toast.error('Failed to save coordinates')
+                        console.error(err)
+                      }
                     }
+                    rowSelection[rowId] = true
+                    setRowSelection({ ...rowSelection })
                     setPendingCoordsRow(null)
                   }}
                 />

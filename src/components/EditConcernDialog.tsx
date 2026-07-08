@@ -56,6 +56,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
   const [showAssignedTo, setShowAssignedTo] = useState(!!concern.assignedTo)
   const [reportTitle, setReportTitle] = useState(concern.reportTitle)
   const [location, setLocation] = useState(concern.location)
+  const [coordText, setCoordText] = useState(concern.coordinates || '')
   const [caseRemarks, setCaseRemarks] = useState(concern.caseRemarks)
   const [images, setImages] = useState<ConcernImage[]>(concern.concernPhotos)
   
@@ -84,6 +85,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       setShowAssignedTo(!!concern.assignedTo)
       setReportTitle(concern.reportTitle)
       setLocation(concern.location)
+      setCoordText(concern.coordinates || '')
       setCaseRemarks(concern.caseRemarks)
       setImages(concern.concernPhotos)
       setActionPhotos(concern.actionTaken?.photos || [])
@@ -335,6 +337,12 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         concernPhotos: uploadedImages,
         updatedAt: serverTimestamp(),
       }
+
+      if (coordText.trim()) {
+        updateData.coordinates = coordText.trim()
+      } else {
+        updateData.coordinates = null
+      }
       
       // Check if user has any action data (be very strict)
       const hasActionPhotos = uploadedActionPhotos.length > 0
@@ -535,6 +543,20 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                     required
                     disabled={isSubmitting}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="coordText">Coordinates</Label>
+                  <Input
+                    id="coordText"
+                    placeholder={`14°35'08.1"N 120°35'18.7"E`}
+                    value={coordText}
+                    onChange={(e) => setCoordText(e.target.value)}
+                    disabled={isSubmitting}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Enter in any format — will be displayed exactly as typed on exports
+                  </p>
                 </div>
 
                 <div className="space-y-2">

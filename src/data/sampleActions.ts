@@ -29,7 +29,7 @@ export interface Action {
   caseRemarks: string
   remarks?: string
   location: string
-  coordinates?: { lat: number; lng: number }
+  coordinates?: string
   concernPhotos: ConcernImage[]
   answeredBy: string
   actionTaken: ActionTaken | null

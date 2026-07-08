@@ -938,8 +938,7 @@ export default function ActionCenter() {
       row('Municipality', item.municipality, margin + 72)
       row('Category', item.category, margin + 138)
       if (item.coordinates) {
-        const coordVal = typeof item.coordinates === 'object' ? `${item.coordinates.lat?.toFixed?.(4) ?? ''}, ${item.coordinates.lng?.toFixed?.(4) ?? ''}` : item.coordinates
-        if (coordVal) row('Coord', coordVal, margin + 200, 16)
+        row('Coord', item.coordinates, margin + 200, 16)
       }
       y += 9
 

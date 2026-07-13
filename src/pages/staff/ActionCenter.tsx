@@ -851,17 +851,13 @@ export default function ActionCenter() {
       doc.setFontSize(8.5)
       doc.setTextColor(60, 60, 60)
       doc.setFont('helvetica', 'bold')
-      doc.text('Report Date:', margin + 4, y + 6)
+      doc.text('Total Records:', margin + 4, y + 6)
       doc.setFont('helvetica', 'normal')
-      doc.text(format(new Date(), 'MMMM dd, yyyy'), margin + 20, y + 6)
+      doc.text(`${data.length}`, margin + 26, y + 6)
       doc.setFont('helvetica', 'bold')
-      doc.text('Total Records:', pageWidth / 3, y + 6)
+      doc.text('Reference:', margin + 80, y + 6)
       doc.setFont('helvetica', 'normal')
-      doc.text(`${data.length}`, pageWidth / 3 + 20, y + 6)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Reference:', (pageWidth / 3) * 2, y + 6)
-      doc.setFont('helvetica', 'normal')
-      doc.text(`1BAC-ACT-${format(new Date(), 'yyMMdd')}`, (pageWidth / 3) * 2 + 16, y + 6)
+      doc.text(`1BAC-ACT-${format(new Date(), 'yyMMdd')}`, margin + 114, y + 6)
       y += 16
     }
 
@@ -942,11 +938,6 @@ export default function ActionCenter() {
       }
       y += 9
 
-      // Field separator line
-      doc.setDrawColor(235, 235, 235)
-      doc.line(margin + 2, y, pageWidth - margin - 2, y)
-      y += 3
-
       // ── Report Title ──
       if (needsPage(12)) {}
       doc.setFont('helvetica', 'bold')
@@ -1020,31 +1011,31 @@ export default function ActionCenter() {
       }
 
       if (allImgs.length > 0) {
-        const imgW = 72
-        const imgH = 54
-        const perRow = Math.min(Math.floor((contentWidth - 10) / (imgW + 6)), 4)
+        const imgW = 55
+        const imgH = 41
+        const perRow = 4
         const gap = (contentWidth - 10 - perRow * imgW) / (perRow - 1 || 1)
-        const rows = Math.ceil(Math.min(allImgs.length, 6) / perRow)
+        const maxImgs = Math.min(allImgs.length, 8)
+        const rows = Math.ceil(maxImgs / perRow)
         const imgBlockH = rows * (imgH + 10) + 10
 
         if (needsPage(imgBlockH)) {}
 
-        y += 2
+        y += 1
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(9)
         doc.setTextColor(26, 58, 107)
         doc.text('Supporting Photographs', margin + 2, y)
-        y += 3.5
+        y += 3
         doc.setDrawColor(220, 220, 220)
         doc.line(margin + 2, y, pageWidth - margin - 2, y)
-        y += 5
+        y += 4
 
-        const max = Math.min(allImgs.length, 6)
-        for (let j = 0; j < max; j++) {
+        for (let j = 0; j < maxImgs; j++) {
           const c = j % perRow
           const r = Math.floor(j / perRow)
           const xPos = margin + 5 + c * (imgW + gap)
-          const yPos = y + r * (imgH + 10)
+          const yPos = y + r * (imgH + 8)
 
           doc.setDrawColor(200, 200, 200)
           doc.setFillColor(248, 248, 248)
@@ -1063,10 +1054,10 @@ export default function ActionCenter() {
           doc.setFontSize(6.5)
           doc.setTextColor(120, 120, 120)
           doc.setFont('helvetica', 'normal')
-          doc.text(`${allImgs[j].label} ${j + 1}`, xPos + imgW / 2, yPos + imgH + 4.5, { align: 'center' })
+          doc.text(`${allImgs[j].label} ${j + 1}`, xPos + imgW / 2, yPos + imgH + 4, { align: 'center' })
         }
 
-        y += rows * (imgH + 10) + 2
+        y += rows * (imgH + 8) + 2
       }
 
       y += 4

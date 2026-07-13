@@ -939,7 +939,9 @@ export default function ActionCenter() {
       y += 9
 
       // ── Report Title ──
-      if (needsPage(12)) {}
+      const tLines = doc.splitTextToSize(item.reportTitle, fieldW)
+      const tH = tLines.length * 4 + 8
+      if (needsPage(tH)) {}
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(80, 80, 80)
@@ -948,12 +950,13 @@ export default function ActionCenter() {
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(30, 30, 30)
-      const tLines = doc.splitTextToSize(item.reportTitle, fieldW)
       doc.text(tLines, margin + 2, y)
       y += tLines.length * 4 + 2
 
       // ── Location ──
-      if (needsPage(12)) {}
+      const lLines = doc.splitTextToSize(item.location, fieldW)
+      const lH = lLines.length * 4 + 8
+      if (needsPage(lH)) {}
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(80, 80, 80)
@@ -962,13 +965,14 @@ export default function ActionCenter() {
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(30, 30, 30)
-      const lLines = doc.splitTextToSize(item.location, fieldW)
       doc.text(lLines, margin + 2, y)
       y += lLines.length * 4 + 2
 
       // ── Remarks ──
       if (item.caseRemarks) {
-        if (needsPage(12)) {}
+        const rLines = doc.splitTextToSize(item.caseRemarks, fieldW)
+        const rH = rLines.length * 4 + 8
+        if (needsPage(rH)) {}
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(9)
         doc.setTextColor(80, 80, 80)
@@ -977,14 +981,21 @@ export default function ActionCenter() {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9.5)
         doc.setTextColor(30, 30, 30)
-        const rLines = doc.splitTextToSize(item.caseRemarks, fieldW)
         doc.text(rLines, margin + 2, y)
         y += rLines.length * 4 + 2
       }
 
-      // ── Action Notes ──
+      // ── Action Notes (2-column) ──
       if (item.actionTaken?.notes) {
-        if (needsPage(12)) {}
+        const halfW = (fieldW - colGap) / 2
+        const lh = 4
+        const lines = doc.splitTextToSize(item.actionTaken.notes, halfW)
+        const mid = Math.ceil(lines.length / 2)
+        const leftN = lines.slice(0, mid)
+        const rightN = lines.slice(mid)
+        const textH = Math.max(leftN.length, rightN.length) * lh + 10
+
+        if (needsPage(textH)) {}
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(9)
         doc.setTextColor(26, 58, 107)
@@ -996,9 +1007,9 @@ export default function ActionCenter() {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9.5)
         doc.setTextColor(30, 30, 30)
-        const nLines = doc.splitTextToSize(item.actionTaken.notes, fieldW)
-        doc.text(nLines, margin + 2, y)
-        y += nLines.length * 4 + 2
+        doc.text(leftN, margin + 2, y)
+        doc.text(rightN, margin + 2 + halfW + colGap, y)
+        y += textH
       }
 
       // ── Supporting Photographs ──

@@ -47,15 +47,15 @@ export const generatePNPSummaryPDF = async (
   // Filter and calculate statistics
   const totalConcerns = concerns.length
   const pendingCount = concerns.filter(c => c.status === 'pending').length
-  const inProgressCount = concerns.filter(c => c.status === 'in-progress').length
+  const forValidationCount = concerns.filter(c => c.status === 'for-validation').length
   const completedCount = concerns.filter(c => c.status === 'completed').length
   const completionRate = totalConcerns > 0 ? Math.round((completedCount / totalConcerns) * 100) : 0
 
   // District statistics
   const districtStats: Record<string, any> = {
-    'First District': { total: 0, pending: 0, inProgress: 0, completed: 0, municipalities: {} },
-    'Second District': { total: 0, pending: 0, inProgress: 0, completed: 0, municipalities: {} },
-    'Third District': { total: 0, pending: 0, inProgress: 0, completed: 0, municipalities: {} },
+    'First District': { total: 0, pending: 0, forValidation: 0, completed: 0, municipalities: {} },
+    'Second District': { total: 0, pending: 0, forValidation: 0, completed: 0, municipalities: {} },
+    'Third District': { total: 0, pending: 0, forValidation: 0, completed: 0, municipalities: {} },
   }
 
   concerns.forEach(concern => {
@@ -63,7 +63,7 @@ export const generatePNPSummaryPDF = async (
     if (district) {
       districtStats[district].total++
       if (concern.status === 'pending') districtStats[district].pending++
-      if (concern.status === 'in-progress') districtStats[district].inProgress++
+      if (concern.status === 'for-validation') districtStats[district].forValidation++
       if (concern.status === 'completed') districtStats[district].completed++
       
       if (!districtStats[district].municipalities[concern.municipality]) {
@@ -311,7 +311,7 @@ export const generatePNPSummaryPDF = async (
 
   const statusData = [
     { label: 'Pending', count: pendingCount, color: [251, 191, 36], icon: '!' },
-    { label: 'In Progress', count: inProgressCount, color: [59, 130, 246], icon: '~' },
+    { label: 'For Validation', count: forValidationCount, color: [251, 146, 60], icon: '~' },
     { label: 'Completed', count: completedCount, color: [34, 197, 94], icon: '+' },
   ]
 
@@ -399,14 +399,14 @@ export const generatePNPSummaryPDF = async (
     district,
     stats.total.toString(),
     stats.pending.toString(),
-    stats.inProgress.toString(),
+    stats.forValidation.toString(),
     stats.completed.toString(),
     stats.total > 0 ? `${Math.round((stats.completed / stats.total) * 100)}%` : '0%',
   ])
 
   autoTable(doc, {
     startY: yPos,
-    head: [['District', 'Total', 'Pending', 'In Progress', 'Completed', 'Rate']],
+    head: [['District', 'Total', 'Pending', 'For Validation', 'Completed', 'Rate']],
     body: districtTableData,
     theme: 'grid',
     headStyles: { 
@@ -675,7 +675,7 @@ export const generatePNPSummaryPDF = async (
     // District statistics cards
     const districtTotal = districtConcerns.length
     const districtPending = districtConcerns.filter(c => c.status === 'pending').length
-    const districtInProgress = districtConcerns.filter(c => c.status === 'in-progress').length
+    const districtForValidation = districtConcerns.filter(c => c.status === 'for-validation').length
     const districtCompleted = districtConcerns.filter(c => c.status === 'completed').length
     const districtRate = districtTotal > 0 ? Math.round((districtCompleted / districtTotal) * 100) : 0
 
@@ -685,7 +685,7 @@ export const generatePNPSummaryPDF = async (
     const districtCards = [
       { label: 'Total', value: districtTotal, color: [100, 116, 139] },
       { label: 'Pending', value: districtPending, color: [251, 191, 36] },
-      { label: 'In Progress', value: districtInProgress, color: [59, 130, 246] },
+      { label: 'For Validation', value: districtForValidation, color: [251, 146, 60] },
       { label: 'Completed', value: districtCompleted, color: [34, 197, 94] },
     ]
 
@@ -773,15 +773,15 @@ export const generatePNPSummaryPDF = async (
     yPos = (doc as any).lastAutoTable.finalY + 12
 
     // Status tables
-    const statuses: Array<{ status: 'pending' | 'in-progress' | 'completed', label: string, headerColor: [number, number, number] }> = [
-      { status: 'pending', label: 'PENDING CONCERNS', headerColor: [251, 191, 36] },
-      { status: 'in-progress', label: 'IN-PROGRESS CONCERNS', headerColor: [59, 130, 246] },
-      { status: 'completed', label: 'COMPLETED CONCERNS', headerColor: [34, 197, 94] },
+    const statuses: Array<{ status: 'pending' | 'for-validation' | 'completed', label: string, filter: (c: any) => boolean, headerColor: [number, number, number] }> = [
+      { status: 'pending', label: 'PENDING CONCERNS', filter: (c) => c.status === 'pending', headerColor: [251, 191, 36] },
+      { status: 'for-validation', label: 'FOR VALIDATION CONCERNS', filter: (c) => c.status === 'for-validation', headerColor: [251, 146, 60] },
+      { status: 'completed', label: 'COMPLETED CONCERNS', filter: (c) => c.status === 'completed', headerColor: [34, 197, 94] },
     ]
 
-    statuses.forEach(({ status, label, headerColor }) => {
+    statuses.forEach(({ label, filter, headerColor }) => {
       const statusConcerns = districtConcerns
-        .filter(c => c.status === status)
+        .filter(filter)
         .sort((a, b) => {
           // Sort by municipality first, then by date
           const muniCompare = a.municipality.localeCompare(b.municipality)
@@ -851,7 +851,7 @@ export const generatePNPSummaryPDF = async (
     const summaryTableData = [
       ['Total Concerns', districtTotal.toString()],
       ['Pending', `${districtPending} (${districtTotal > 0 ? Math.round((districtPending / districtTotal) * 100) : 0}%)`],
-      ['In Progress', `${districtInProgress} (${districtTotal > 0 ? Math.round((districtInProgress / districtTotal) * 100) : 0}%)`],
+      ['For Validation', `${districtForValidation} (${districtTotal > 0 ? Math.round((districtForValidation / districtTotal) * 100) : 0}%)`],
       ['Completed', `${districtCompleted} (${districtTotal > 0 ? Math.round((districtCompleted / districtTotal) * 100) : 0}%)`],
       ['Completion Rate', `${districtRate}%`],
     ]

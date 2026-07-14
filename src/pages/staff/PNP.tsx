@@ -490,13 +490,17 @@ export default function PNP() {
       if (item.status === 'completed') {
         doc.setFillColor(220, 252, 231)
         doc.setTextColor(22, 163, 74)
+      } else if (item.status === 'for-validation') {
+        doc.setFillColor(255, 237, 213)
+        doc.setTextColor(234, 88, 12)
       } else {
         doc.setFillColor(219, 234, 254)
         doc.setTextColor(29, 78, 216)
       }
       doc.roundedRect(statusX, yPosition + 2, 22, 6, 1, 1, 'F')
       doc.setFontSize(8)
-      doc.text(item.status.toUpperCase(), statusX + 11, yPosition + 6, { align: 'center' })
+      const statusLabel = item.status === 'for-validation' ? 'For Validation' : item.status.charAt(0).toUpperCase() + item.status.slice(1)
+      doc.text(statusLabel.toUpperCase(), statusX + 11, yPosition + 6, { align: 'center' })
       
       yPosition += 15
       doc.setTextColor(0, 0, 0)

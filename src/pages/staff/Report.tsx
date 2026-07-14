@@ -32,7 +32,7 @@ export default function Report() {
   const [reportType, setReportType] = useState<'action-center' | 'pnp' | '1bac'>('action-center')
   const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'year' | 'custom'>('all')
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'under-action' | 'resolved' | 'closed'>('all')
   const [showSummaryDialog, setShowSummaryDialog] = useState(false)
   const [show1BACTypeDialog, setShow1BACTypeDialog] = useState(false)
   const [show1BACSummaryLoading, setShow1BACSummaryLoading] = useState(false)
@@ -735,7 +735,9 @@ export default function Report() {
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="under-action">Under Action</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

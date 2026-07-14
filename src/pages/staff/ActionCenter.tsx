@@ -985,31 +985,51 @@ export default function ActionCenter() {
         y += rLines.length * 4 + 2
       }
 
-      // ── Action Notes (2-column) ──
+      // ── Action Notes ──
       if (item.actionTaken?.notes) {
-        const halfW = (fieldW - colGap) / 2
         const lh = 4
-        const lines = doc.splitTextToSize(item.actionTaken.notes, halfW)
-        const mid = Math.ceil(lines.length / 2)
-        const leftN = lines.slice(0, mid)
-        const rightN = lines.slice(mid)
-        const textH = Math.max(leftN.length, rightN.length) * lh + 10
+        const oneColLines = doc.splitTextToSize(item.actionTaken.notes, fieldW)
+        const oneColH = oneColLines.length * lh + 10
 
-        if (needsPage(textH)) {}
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.setTextColor(26, 58, 107)
-        doc.text('Action Notes', margin + 2, y)
-        y += 3.5
-        doc.setDrawColor(220, 220, 220)
-        doc.line(margin + 2, y, pageWidth - margin - 2, y)
-        y += 4
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9.5)
-        doc.setTextColor(30, 30, 30)
-        doc.text(leftN, margin + 2, y)
-        doc.text(rightN, margin + 2 + halfW + colGap, y)
-        y += textH
+        if (y + oneColH < pageHeight - 12) {
+          if (needsPage(oneColH)) {}
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(9)
+          doc.setTextColor(26, 58, 107)
+          doc.text('Action Notes', margin + 2, y)
+          y += 3.5
+          doc.setDrawColor(220, 220, 220)
+          doc.line(margin + 2, y, pageWidth - margin - 2, y)
+          y += 4
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9.5)
+          doc.setTextColor(30, 30, 30)
+          doc.text(oneColLines, margin + 2, y)
+          y += oneColLines.length * lh + 2
+        } else {
+          const halfW = (fieldW - colGap) / 2
+          const lines = doc.splitTextToSize(item.actionTaken.notes, halfW)
+          const mid = Math.ceil(lines.length / 2)
+          const leftN = lines.slice(0, mid)
+          const rightN = lines.slice(mid)
+          const textH = Math.max(leftN.length, rightN.length) * lh + 10
+
+          if (needsPage(textH)) {}
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(9)
+          doc.setTextColor(26, 58, 107)
+          doc.text('Action Notes', margin + 2, y)
+          y += 3.5
+          doc.setDrawColor(220, 220, 220)
+          doc.line(margin + 2, y, pageWidth - margin - 2, y)
+          y += 4
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9.5)
+          doc.setTextColor(30, 30, 30)
+          doc.text(leftN, margin + 2, y)
+          doc.text(rightN, margin + 2 + halfW + colGap, y)
+          y += textH
+        }
       }
 
       // ── Supporting Photographs ──

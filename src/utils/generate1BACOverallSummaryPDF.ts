@@ -47,15 +47,15 @@ export const generate1BACOverallSummaryPDF = async (
   // Filter and calculate statistics
   const totalConcerns = concerns.length
   const pendingCount = concerns.filter(c => c.status === 'pending').length
-  const inProgressCount = concerns.filter(c => c.status === 'in-progress').length
-  const completedCount = concerns.filter(c => c.status === 'completed').length
-  const completionRate = totalConcerns > 0 ? Math.round((completedCount / totalConcerns) * 100) : 0
+  const underActionCount = concerns.filter(c => c.status === 'under-action' || c.status === 'in-progress').length
+  const resolvedCount = concerns.filter(c => c.status === 'resolved' || c.status === 'closed' || c.status === 'completed').length
+  const completionRate = totalConcerns > 0 ? Math.round((resolvedCount / totalConcerns) * 100) : 0
 
   // District statistics
   const districtStats: Record<string, any> = {
-    'First District': { total: 0, pending: 0, inProgress: 0, completed: 0, municipalities: {} },
-    'Second District': { total: 0, pending: 0, inProgress: 0, completed: 0, municipalities: {} },
-    'Third District': { total: 0, pending: 0, inProgress: 0, completed: 0, municipalities: {} },
+    'First District': { total: 0, pending: 0, underAction: 0, resolved: 0, municipalities: {} },
+    'Second District': { total: 0, pending: 0, underAction: 0, resolved: 0, municipalities: {} },
+    'Third District': { total: 0, pending: 0, underAction: 0, resolved: 0, municipalities: {} },
   }
 
   concerns.forEach(concern => {
@@ -63,8 +63,8 @@ export const generate1BACOverallSummaryPDF = async (
     if (district) {
       districtStats[district].total++
       if (concern.status === 'pending') districtStats[district].pending++
-      if (concern.status === 'in-progress') districtStats[district].inProgress++
-      if (concern.status === 'completed') districtStats[district].completed++
+      if (concern.status === 'under-action' || concern.status === 'in-progress') districtStats[district].underAction++
+      if (concern.status === 'resolved' || concern.status === 'closed' || concern.status === 'completed') districtStats[district].resolved++
       
       if (!districtStats[district].municipalities[concern.municipality]) {
         districtStats[district].municipalities[concern.municipality] = 0
@@ -232,8 +232,8 @@ export const generate1BACOverallSummaryPDF = async (
   // Three metric cards
   const metricsData = [
     { label: 'TOTAL CONCERNS', value: totalConcerns.toString(), color: categoryColor, icon: '#' },
-    { label: 'COMPLETED', value: completedCount.toString(), color: [34, 197, 94] as [number, number, number], icon: '+' },
-    { label: 'COMPLETION RATE', value: `${completionRate}%`, color: completionRate >= 70 ? [34, 197, 94] : completionRate >= 50 ? [234, 179, 8] : [239, 68, 68] as [number, number, number], icon: '%' },
+    { label: 'RESOLVED', value: resolvedCount.toString(), color: [34, 197, 94] as [number, number, number], icon: '+' },
+    { label: 'RESOLUTION RATE', value: `${completionRate}%`, color: completionRate >= 70 ? [34, 197, 94] : completionRate >= 50 ? [234, 179, 8] : [239, 68, 68] as [number, number, number], icon: '%' },
   ]
 
   metricsData.forEach((metric, index) => {
@@ -311,8 +311,8 @@ export const generate1BACOverallSummaryPDF = async (
 
   const statusData = [
     { label: 'Pending', count: pendingCount, color: [251, 191, 36], icon: '!' },
-    { label: 'In Progress', count: inProgressCount, color: [59, 130, 246], icon: '~' },
-    { label: 'Completed', count: completedCount, color: [34, 197, 94], icon: '+' },
+    { label: 'Under Action', count: underActionCount, color: [59, 130, 246], icon: '~' },
+    { label: 'Resolved', count: resolvedCount, color: [34, 197, 94], icon: '+' },
   ]
 
   statusData.forEach((status, index) => {
@@ -399,14 +399,14 @@ export const generate1BACOverallSummaryPDF = async (
     district,
     stats.total.toString(),
     stats.pending.toString(),
-    stats.inProgress.toString(),
-    stats.completed.toString(),
-    stats.total > 0 ? `${Math.round((stats.completed / stats.total) * 100)}%` : '0%',
+    stats.underAction.toString(),
+    stats.resolved.toString(),
+    stats.total > 0 ? `${Math.round((stats.resolved / stats.total) * 100)}%` : '0%',
   ])
 
   autoTable(doc, {
     startY: yPos,
-    head: [['District', 'Total', 'Pending', 'In Progress', 'Completed', 'Rate']],
+    head: [['District', 'Total', 'Pending', 'Under Action', 'Resolved', 'Rate']],
     body: districtTableData,
     theme: 'grid',
     headStyles: { 

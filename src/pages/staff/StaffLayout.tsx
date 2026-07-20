@@ -68,6 +68,12 @@ const menuItems = [
     roles: ['staff', 'environmental', 'agricultural'], // All roles
   },
   {
+    title: 'PGO',
+    icon: Building03Icon,
+    path: '/staff/pgo',
+    roles: ['staff', 'environmental', 'agricultural'], // All roles
+  },
+  {
     title: 'Report',
     icon: FileValidationIcon,
     path: '/staff/report',
@@ -331,6 +337,11 @@ export default function StaffLayout() {
       title: 'PNP',
       icon: SecurityIcon,
       path: '/staff/pnp',
+    },
+    {
+      title: 'PGO',
+      icon: Building03Icon,
+      path: '/staff/pgo',
     },
     {
       title: 'Report',

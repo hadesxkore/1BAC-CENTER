@@ -7,6 +7,7 @@ import Dashboard from './pages/staff/Dashboard'
 import ActionCenter from './pages/staff/ActionCenter'
 import OneBAC from './pages/staff/OneBAC'
 import PNP from './pages/staff/PNP'
+import PGO from './pages/staff/PGO'
 import Report from './pages/staff/Report'
 import Users from './pages/staff/Users'
 import Settings from './pages/staff/Settings'
@@ -40,6 +41,7 @@ function App() {
             <Route path="action-center" element={<ActionCenter />} />
             <Route path="1bac" element={<OneBAC />} />
             <Route path="pnp" element={<PNP />} />
+            <Route path="pgo" element={<PGO />} />
             <Route path="report" element={<Report />} />
             <Route path="users" element={<Users />} />
             <Route path="settings" element={<Settings />} />

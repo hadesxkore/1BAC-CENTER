@@ -12,6 +12,7 @@ import {
   ArrowRight01Icon, 
   FileRemoveIcon,
   SecurityIcon,
+  Building03Icon,
   AlertCircleIcon,
   CheckmarkCircle01Icon,
   ChartLineData01Icon,
@@ -46,9 +47,14 @@ interface DashboardStats {
     pending: number
     completed: number
   }
+  pgo: {
+    total: number
+    pending: number
+    completed: number
+  }
   recentActivity: Array<{
     id: string
-    type: 'action-center' | 'pnp'
+    type: 'action-center' | 'pnp' | 'pgo'
     title: string
     status: string
     date: string
@@ -88,6 +94,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     actionCenter: { total: 0, pending: 0, completed: 0 },
     pnp: { total: 0, pending: 0, completed: 0 },
+    pgo: { total: 0, pending: 0, completed: 0 },
     recentActivity: [],
     municipalityBreakdown: [],
     categoryDistribution: [],
@@ -105,14 +112,16 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setIsLoading(true)
     try {
-      // Optimize: Fetch both collections in parallel
-      const [concernsSnapshot, pnpSnapshot] = await Promise.all([
+      // Optimize: Fetch all collections in parallel
+      const [concernsSnapshot, pnpSnapshot, pgoSnapshot] = await Promise.all([
         getDocs(collection(db, 'concerns')),
-        getDocs(collection(db, 'pnp_reports'))
+        getDocs(collection(db, 'pnp_reports')),
+        getDocs(collection(db, 'pgo_reports'))
       ])
 
       const concerns = concernsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       const pnpReports = pnpSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      const pgoReports = pgoSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       
       // Calculate Action Center stats
       const actionCenterStats = {
@@ -128,9 +137,16 @@ export default function Dashboard() {
         completed: pnpReports.filter((r: any) => r.status === 'completed').length,
       }
 
+      // Calculate PGO stats
+      const pgoStats = {
+        total: pgoReports.length,
+        pending: pgoReports.filter((r: any) => r.status === 'pending').length,
+        completed: pgoReports.filter((r: any) => r.status === 'completed').length,
+      }
+
       // Municipality Breakdown (Top 5)
       const municipalityMap = new Map<string, number>()
-      ;[...concerns, ...pnpReports].forEach((item: any) => {
+      ;[...concerns, ...pnpReports, ...pgoReports].forEach((item: any) => {
         const muni = item.municipality || 'Unknown'
         municipalityMap.set(muni, (municipalityMap.get(muni) || 0) + 1)
       })
@@ -157,7 +173,7 @@ export default function Dashboard() {
         const dayStart = startOfDay(date)
         const dayEnd = endOfDay(date)
         
-        const dayData = [...concerns, ...pnpReports].filter((item: any) => {
+        const dayData = [...concerns, ...pnpReports, ...pgoReports].filter((item: any) => {
           const itemDate = item.createdAt?.toDate?.() || new Date(item.createdAt)
           return itemDate >= dayStart && itemDate <= dayEnd
         })
@@ -174,12 +190,12 @@ export default function Dashboard() {
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
       const lastMonthStart = subMonths(currentMonthStart, 1)
       
-      const currentMonthData = [...concerns, ...pnpReports].filter((item: any) => {
+      const currentMonthData = [...concerns, ...pnpReports, ...pgoReports].filter((item: any) => {
         const itemDate = item.createdAt?.toDate?.() || new Date(item.createdAt)
         return itemDate >= currentMonthStart
       })
       
-      const lastMonthData = [...concerns, ...pnpReports].filter((item: any) => {
+      const lastMonthData = [...concerns, ...pnpReports, ...pgoReports].filter((item: any) => {
         const itemDate = item.createdAt?.toDate?.() || new Date(item.createdAt)
         return itemDate >= lastMonthStart && itemDate < currentMonthStart
       })
@@ -191,7 +207,7 @@ export default function Dashboard() {
         : 0
 
       // Average Resolution Time (in days)
-      const completedItems = [...concerns, ...pnpReports].filter((item: any) => 
+      const completedItems = [...concerns, ...pnpReports, ...pgoReports].filter((item: any) => 
         item.status === 'completed' && item.actionDate
       )
       
@@ -248,7 +264,7 @@ export default function Dashboard() {
           const bTime = b.createdAt?.toMillis?.() || 0
           return bTime - aTime
         })
-        .slice(0, 2)
+        .slice(0, 1)
         .map((r: any) => ({
           id: r.id,
           type: 'pnp' as const,
@@ -257,13 +273,29 @@ export default function Dashboard() {
           date: r.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
         }))
 
-      const recentActivity = [...recentConcerns, ...recentPNP]
+      const recentPGO = pgoReports
+        .sort((a: any, b: any) => {
+          const aTime = a.createdAt?.toMillis?.() || 0
+          const bTime = b.createdAt?.toMillis?.() || 0
+          return bTime - aTime
+        })
+        .slice(0, 1)
+        .map((r: any) => ({
+          id: r.id,
+          type: 'pgo' as const,
+          title: r.reportTitle,
+          status: r.status,
+          date: r.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        }))
+
+      const recentActivity = [...recentConcerns, ...recentPNP, ...recentPGO]
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5)
 
       setStats({
         actionCenter: actionCenterStats,
         pnp: pnpStats,
+        pgo: pgoStats,
         recentActivity,
         municipalityBreakdown,
         categoryDistribution,
@@ -279,9 +311,9 @@ export default function Dashboard() {
     }
   }
 
-  const totalReports = stats.actionCenter.total + stats.pnp.total
-  const totalPending = stats.actionCenter.pending + stats.pnp.pending
-  const totalCompleted = stats.actionCenter.completed + stats.pnp.completed
+  const totalReports = stats.actionCenter.total + stats.pnp.total + stats.pgo.total
+  const totalPending = stats.actionCenter.pending + stats.pnp.pending + stats.pgo.pending
+  const totalCompleted = stats.actionCenter.completed + stats.pnp.completed + stats.pgo.completed
   const completionRate = totalReports > 0 ? Math.round((totalCompleted / totalReports) * 100) : 0
 
   return (
@@ -630,7 +662,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Access Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Action Center Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -724,13 +756,60 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* PGO Reports Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+        >
+          <Card className="hover:shadow-lg transition-all hover:border-purple-200">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <HugeiconsIcon icon={Building03Icon} className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">PGO Reports</CardTitle>
+                    <CardDescription>Provincial Governor's Office reports</CardDescription>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{stats.pgo.total}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Total</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-yellow-600">{stats.pgo.pending}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Pending</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">{stats.pgo.completed}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Done</p>
+                </div>
+              </div>
+              <Separator />
+              <Button 
+                onClick={() => navigate('/staff/pgo')} 
+                className="w-full bg-purple-600 hover:bg-purple-700"
+              >
+                View PGO Reports
+                <HugeiconsIcon icon={ArrowRight01Icon} className="w-4 h-4 ml-2" />
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       {/* Recent Activity */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.7 }}
+        transition={{ delay: 0.8 }}
       >
         <Card>
           <CardHeader>

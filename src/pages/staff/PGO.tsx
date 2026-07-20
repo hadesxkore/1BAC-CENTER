@@ -588,7 +588,7 @@ export default function PGO() {
         const status = row.getValue('status') as string
         return (
           <UpdateStatusDialog
-            reportId={row.original.id}
+            concernId={row.original.id}
             currentStatus={status}
             collectionName="pgo_reports"
             withCompleted
@@ -613,8 +613,8 @@ export default function PGO() {
               <EditConcernDialog concern={row.original} collectionName="pgo_reports" />
               {isInProgress && (
                 <MarkAsCompletedDialog 
-                  reportId={row.original.id} 
-                  reportTitle={row.original.reportTitle}
+                  concernId={row.original.id} 
+                  concernTitle={row.original.reportTitle}
                   collectionName="pgo_reports"
                 />
               )}

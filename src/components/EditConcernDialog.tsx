@@ -75,7 +75,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
   const [location, setLocation] = useState(concern.location)
   const [coordText, setCoordText] = useState(concern.coordinates || '')
   const [caseRemarks, setCaseRemarks] = useState(concern.caseRemarks)
-  const [images, setImages] = useState<ConcernImage[]>(concern.concernPhotos)
+  const [images, setImages] = useState<ConcernImage[]>(concern.concernPhotos || [])
   
   // Action taken fields - PGO
   const [pgoActionPhotos, setPgoActionPhotos] = useState<ConcernImage[]>(
@@ -125,7 +125,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       setLocation(concern.location)
       setCoordText(concern.coordinates || '')
       setCaseRemarks(concern.caseRemarks)
-      setImages(concern.concernPhotos)
+      setImages(concern.concernPhotos || [])
       
       // PGO action
       setPgoActionPhotos(latestPgoAction?.photos || [])

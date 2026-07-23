@@ -513,9 +513,13 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       updateData.pgoInvolved = newActionHistory.some(a => a.actionType === 'pgo')
       updateData.hasPgoAction = newActionHistory.some(a => a.actionType === 'pgo')
       updateData.hasDepartmentAction = newActionHistory.some(a => a.actionType === 'department')
-      updateData.latestActionType = newActionHistory.length > 0 
-        ? newActionHistory[newActionHistory.length - 1].actionType 
-        : undefined
+      
+      // Only set latestActionType if there are actions (Firebase doesn't allow undefined)
+      if (newActionHistory.length > 0) {
+        updateData.latestActionType = newActionHistory[newActionHistory.length - 1].actionType
+      } else {
+        updateData.latestActionType = null
+      }
       
       // Determine latest action date for actionDate field
       if (newActionHistory.length > 0) {

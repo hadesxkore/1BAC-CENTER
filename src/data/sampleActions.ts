@@ -1,5 +1,6 @@
 export type ActionStatus = 'pending' | 'in-progress' | 'completed' | 'unlocated' | 'under-action' | 'resolved' | 'closed' | 'for-validation'
 export type ActionCategory = 'environmental' | 'agricultural'
+export type ActionType = 'pgo' | 'department' | 'initial'
 
 export interface ConcernImage {
   url: string
@@ -15,6 +16,17 @@ export interface ActionTaken {
   otherInfo?: string
   submittedBy: string
   submittedAt: string
+}
+
+export interface ActionRecord {
+  actionId: string
+  actionType: ActionType
+  photos: ConcernImage[]
+  notes: string
+  otherInfo?: string
+  submittedBy: string
+  submittedAt: string
+  actionDate: string
 }
 
 export interface Action {
@@ -37,6 +49,13 @@ export interface Action {
   status: ActionStatus
   reportedBy: string
   createdAt: string
+  
+  // NEW: PGO tracking fields
+  actionHistory?: ActionRecord[]
+  pgoInvolved?: boolean
+  hasPgoAction?: boolean
+  hasDepartmentAction?: boolean
+  latestActionType?: ActionType
 }
 
 export const sampleActions: Action[] = [

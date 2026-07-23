@@ -14,20 +14,22 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Image02Icon, Delete02Icon, File02Icon, FileAttachmentIcon } from '@hugeicons/core-free-icons'
 import { uploadToCloudinary, uploadMultipleToCloudinary, compressImage } from '@/config/cloudinary'
 import { db } from '@/config/firebase'
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore'
 import { useAppStore } from '@/store'
 import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
-import type { ConcernImage } from '@/data/sampleActions'
+import type { ConcernImage, ActionType, ActionRecord } from '@/data/sampleActions'
 
 interface SubmitActionDialogProps {
   concernId: string
   concernTitle: string
   collectionName?: string
+  forceDepartmentAction?: boolean
+  triggerAsMenuItem?: boolean
   onSubmit?: (actionData: { photos: ConcernImage[]; notes: string }) => void
 }
 
-export function SubmitActionDialog({ concernId, concernTitle, collectionName = 'concerns', onSubmit }: SubmitActionDialogProps) {
+export function SubmitActionDialog({ concernId, concernTitle, collectionName = 'concerns', forceDepartmentAction = false, triggerAsMenuItem = false, onSubmit }: SubmitActionDialogProps) {
   const [open, setOpen] = useState(false)
   const [showUnlocatedConfirm, setShowUnlocatedConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -40,6 +42,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [actionStatus, setActionStatus] = useState<string>('resolved')
   const [skipActionDate, setSkipActionDate] = useState(false)
   const [images, setImages] = useState<ConcernImage[]>([])
+  const [isPgoAction, setIsPgoAction] = useState(false) // NEW: PGO toggle
   const { user } = useAppStore()
   
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -244,14 +247,42 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
 
       // Determine final status
       const finalStatus = actionStatus
+      
+      // NEW: Create action record for history
+      const actionRecord = {
+        actionId: `action_${Date.now()}`,
+        actionType: forceDepartmentAction ? 'department' : (isPgoAction ? 'pgo' : 'department'),
+        photos: uploadedImages,
+        notes: notes.trim(),
+        otherInfo: otherInfo.trim(),
+        submittedBy: user?.name || 'Unknown',
+        submittedAt: new Date().toISOString(),
+        actionDate: skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
+      }
 
-      // Update Firestore document
+      // NEW: Fetch existing data to build action history
       const concernRef = doc(db, collectionName, concernId)
+      const concernDoc = await getDoc(concernRef)
+      const existingData = concernDoc.data()
+      const existingHistory = existingData?.actionHistory || []
+      
+      // NEW: Calculate PGO involvement flags
+      const updatedHistory = [...existingHistory, actionRecord]
+      const hasPgo = updatedHistory.some(a => a.actionType === 'pgo')
+      const hasDept = updatedHistory.some(a => a.actionType === 'department')
+
+      // Update Firestore document with both old and new structure
       await updateDoc(concernRef, {
-        actionTaken: actionTakenData,
+        actionTaken: actionTakenData, // Keep for backward compatibility
         actionDate: skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
         status: finalStatus,
         updatedAt: serverTimestamp(),
+        // NEW: Action history fields
+        actionHistory: updatedHistory,
+        pgoInvolved: hasPgo,
+        hasPgoAction: hasPgo,
+        hasDepartmentAction: hasDept,
+        latestActionType: isPgoAction ? 'pgo' : 'department',
       })
       
       // Call parent callback if provided
@@ -259,10 +290,11 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         onSubmit(actionTakenData)
       }
       
+      const actionTypeText = isPgoAction ? 'PGO' : 'Department'
       const statusText = finalStatus === 'resolved' ? 'resolved' : finalStatus === 'closed' ? 'closed' : 'under action'
       const photoText = images.length > 0 
-        ? `Uploaded ${images.length} image(s) and marked as ${statusText}` 
-        : `Marked as ${statusText} (photos to follow)`
+        ? `${actionTypeText} action submitted with ${images.length} image(s) - marked as ${statusText}` 
+        : `${actionTypeText} action submitted - marked as ${statusText}`
       
       toast.success('Action Submitted Successfully!', {
         description: photoText,
@@ -274,6 +306,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       setActionDate(undefined)
       setSkipActionDate(false)
       setImages([])
+      setIsPgoAction(false)
       setUploadProgress(0)
       setOpen(false)
       setShowUnlocatedConfirm(false)
@@ -295,17 +328,56 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-blue-600 text-white hover:bg-blue-700">
-          Submit Action Taken
-        </Button>
+        {triggerAsMenuItem ? (
+          <Button variant="ghost" size="sm" className="w-full justify-start">
+            <HugeiconsIcon icon={FileAttachmentIcon} className="mr-2 h-4 w-4" />
+            Submit Department Action
+          </Button>
+        ) : (
+          <Button size="sm" className="bg-blue-600 text-white hover:bg-blue-700">
+            Submit Action Taken
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-[95vw] sm:max-w-[95vw] lg:max-w-2xl h-auto max-h-[85vh] p-0 flex flex-col gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Submit Action Taken</DialogTitle>
+          <DialogTitle>{forceDepartmentAction ? 'Submit Department Action' : 'Submit Action Taken'}</DialogTitle>
           <DialogDescription>
             Upload photos and notes for: <strong className="text-foreground">{concernTitle}</strong>
           </DialogDescription>
         </DialogHeader>
+        
+        {/* PGO Action Toggle - Hidden when forcing department action */}
+        {!forceDepartmentAction && (
+          <div className="px-6 pt-4 pb-2 bg-muted/30 border-b">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isPgoAction ? 'bg-purple-100 dark:bg-purple-900' : 'bg-muted'}`}>
+                  <span className="text-xl">{isPgoAction ? '🟣' : '🏢'}</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="pgoToggle" className="text-sm font-semibold cursor-pointer">
+                      PGO Action
+                    </Label>
+                    <Checkbox 
+                      id="pgoToggle"
+                      checked={isPgoAction}
+                      onCheckedChange={(checked) => setIsPgoAction(checked as boolean)}
+                      disabled={isSubmitting}
+                      className="data-[state=checked]:bg-purple-600"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isPgoAction 
+                      ? 'This action will be marked as handled by PGO' 
+                      : 'Standard department action'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
           <ScrollArea className="flex-1 overflow-y-auto">

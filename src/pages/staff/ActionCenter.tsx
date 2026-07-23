@@ -123,6 +123,7 @@ export default function ActionCenter() {
   const [municipalityFilter, setMunicipalityFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [reportTitleFilter, setReportTitleFilter] = useState<string>('all')
+  const [pgoFilter, setPgoFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
   const [advancedSearch, setAdvancedSearch] = useState({
@@ -173,6 +174,12 @@ export default function ActionCenter() {
           createdAt: data.createdAt instanceof Timestamp 
             ? data.createdAt.toDate().toISOString()
             : new Date().toISOString(),
+          // NEW: PGO tracking fields
+          actionHistory: data.actionHistory || [],
+          pgoInvolved: data.pgoInvolved || false,
+          hasPgoAction: data.hasPgoAction || false,
+          hasDepartmentAction: data.hasDepartmentAction || false,
+          latestActionType: data.latestActionType,
         })
       })
       setConcerns(concernsData)
@@ -292,6 +299,35 @@ export default function ActionCenter() {
       accessorKey: 'municipality',
       header: 'Municipality',
       cell: ({ row }) => <div className="text-xs">{row.getValue('municipality')}</div>,
+    },
+    {
+      id: 'pgoIndicator',
+      header: () => <div className="text-center">PGO</div>,
+      cell: ({ row }) => {
+        const pgoInvolved = row.original.pgoInvolved
+        const actionHistory = row.original.actionHistory || []
+        const actionCount = actionHistory.length
+        
+        if (!pgoInvolved && actionCount === 0) {
+          return <div className="text-center text-xs text-muted-foreground">-</div>
+        }
+        
+        return (
+          <div className="flex items-center justify-center gap-1">
+            {pgoInvolved && (
+              <div className="w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center" title="PGO Involved">
+                <span className="text-xs">🟣</span>
+              </div>
+            )}
+            {actionCount > 0 && (
+              <div className="text-xs font-semibold text-muted-foreground" title={`${actionCount} action(s) recorded`}>
+                {actionCount}
+              </div>
+            )}
+          </div>
+        )
+      },
+      enableSorting: false,
     },
     {
       accessorKey: 'reportTitle',
@@ -631,6 +667,15 @@ export default function ActionCenter() {
             <DropdownMenuContent align="end">
               <ViewConcernDialog action={row.original} />
               <EditConcernDialog concern={row.original} />
+              {row.original.pgoInvolved && !row.original.hasDepartmentAction && (
+                <SubmitActionDialog
+                  concernId={row.original.id}
+                  concernTitle={row.original.reportTitle}
+                  collectionName="concerns"
+                  forceDepartmentAction={true}
+                  triggerAsMenuItem={true}
+                />
+              )}
               {isInProgress && (
                 <MarkAsCompletedDialog 
                   concernId={row.original.id} 
@@ -701,9 +746,18 @@ export default function ActionCenter() {
         return false
       }
       
+      // PGO filter
+      if (pgoFilter !== 'all') {
+        if (pgoFilter === 'pgo-involved' && !action.pgoInvolved) return false
+        if (pgoFilter === 'pgo-action-only' && !action.hasPgoAction) return false
+        if (pgoFilter === 'dept-action-only' && (!action.hasDepartmentAction || action.hasPgoAction)) return false
+        if (pgoFilter === 'both-actions' && (!action.hasPgoAction || !action.hasDepartmentAction)) return false
+        if (pgoFilter === 'no-pgo' && action.pgoInvolved) return false
+      }
+      
       return true
     })
-  }, [concerns, globalFilter, statusFilter, municipalityFilter, categoryFilter, reportTitleFilter, dateFrom, dateTo, advancedSearch])
+  }, [concerns, globalFilter, statusFilter, municipalityFilter, categoryFilter, reportTitleFilter, dateFrom, dateTo, advancedSearch, pgoFilter])
 
   // Unique report titles for filter dropdown
   const uniqueReportTitles = useMemo(() => {
@@ -1105,6 +1159,7 @@ export default function ActionCenter() {
     setMunicipalityFilter('all')
     setCategoryFilter('all')
     setReportTitleFilter('all')
+    setPgoFilter('all')
     setDateFrom(undefined)
     setDateTo(undefined)
     setAdvancedSearch({ location: '', assignedTo: '', reportedBy: '' })
@@ -1319,6 +1374,25 @@ export default function ActionCenter() {
                     <SelectItem value="agricultural">Agricultural</SelectItem>
                   </SelectContent>
                 </Select>
+
+                <Select value={pgoFilter} onValueChange={setPgoFilter}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="PGO Involvement" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Concerns</SelectItem>
+                    <SelectItem value="pgo-involved">
+                      <div className="flex items-center gap-2">
+                        <span>🟣</span>
+                        <span>PGO Involved</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="pgo-action-only">PGO Action Only</SelectItem>
+                    <SelectItem value="dept-action-only">Dept Action Only</SelectItem>
+                    <SelectItem value="both-actions">Both Actions</SelectItem>
+                    <SelectItem value="no-pgo">No PGO</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Advanced Filters - Collapsible */}
@@ -1490,6 +1564,7 @@ export default function ActionCenter() {
                         <TableRow
                           key={row.id}
                           data-state={row.getIsSelected() && 'selected'}
+                          className={row.original.pgoInvolved ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' : ''}
                         >
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>

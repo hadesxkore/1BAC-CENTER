@@ -164,7 +164,7 @@ export default function PGO() {
           coordinates: typeof data.coordinates === 'object' && data.coordinates !== null
             ? `${data.coordinates.lat ?? ''}, ${data.coordinates.lng ?? ''}`
             : (data.coordinates || undefined),
-          concernPhotos: data.reportPhotos || [],
+          concernPhotos: data.concernPhotos || data.reportPhotos || [],
           answeredBy: data.answeredBy,
           actionTaken: data.actionTaken,
           actionDate: data.actionDate,

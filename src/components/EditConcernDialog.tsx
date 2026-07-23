@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Edit02Icon, Image02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { BATAAN_MUNICIPALITIES } from '@/data/municipalities'
@@ -19,7 +20,7 @@ import { db } from '@/config/firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
 import { format } from 'date-fns'
-import type { Action, ActionCategory } from '@/data/sampleActions'
+import type { Action, ActionCategory, ActionType, ActionRecord } from '@/data/sampleActions'
 
 const ENVIRONMENTAL_OFFICERS = [
   'Juan Dela Cruz - MENRO',
@@ -48,6 +49,22 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isCompressing, setIsCompressing] = useState(false)
   
+  // Determine which action types exist
+  const pgoActions = concern.actionHistory?.filter(a => a.actionType === 'pgo') || []
+  const deptActions = concern.actionHistory?.filter(a => a.actionType === 'department') || []
+  const hasPgoAction = pgoActions.length > 0
+  const hasDeptAction = deptActions.length > 0
+  const hasBothActions = hasPgoAction && hasDeptAction
+  
+  // Get latest action of each type
+  const latestPgo = hasPgoAction ? pgoActions[pgoActions.length - 1] : null
+  const latestDept = hasDeptAction ? deptActions[deptActions.length - 1] : null
+  
+  // Action tab selection
+  const [selectedActionTab, setSelectedActionTab] = useState<ActionType>(
+    hasPgoAction ? 'pgo' : hasDeptAction ? 'department' : 'pgo'
+  )
+  
   // Form fields
   const [dateReported, setDateReported] = useState(concern.dateReported)
   const [municipality, setMunicipality] = useState(concern.municipality)
@@ -60,24 +77,45 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
   const [caseRemarks, setCaseRemarks] = useState(concern.caseRemarks)
   const [images, setImages] = useState<ConcernImage[]>(concern.concernPhotos)
   
-  // Action taken fields
-  const [actionPhotos, setActionPhotos] = useState<ConcernImage[]>(
-    concern.actionTaken?.photos || []
+  // Action taken fields - PGO
+  const [pgoActionPhotos, setPgoActionPhotos] = useState<ConcernImage[]>(
+    latestPgo?.photos || []
   )
-  const [actionNotes, setActionNotes] = useState(concern.actionTaken?.notes || '')
-  const [actionDate, setActionDate] = useState<Date | undefined>(
-    concern.actionDate && concern.actionDate !== 'Ongoing' 
-      ? new Date(concern.actionDate) 
+  const [pgoActionNotes, setPgoActionNotes] = useState(latestPgo?.notes || '')
+  const [pgoActionOtherInfo, setPgoActionOtherInfo] = useState(latestPgo?.otherInfo || '')
+  const [pgoActionDate, setPgoActionDate] = useState<Date | undefined>(
+    latestPgo && latestPgo.actionDate !== 'Ongoing' 
+      ? new Date(latestPgo.actionDate) 
       : undefined
   )
-  const [skipActionDate, setSkipActionDate] = useState(concern.actionDate === 'Ongoing')
+  const [skipPgoActionDate, setSkipPgoActionDate] = useState(latestPgo?.actionDate === 'Ongoing')
+  
+  // Action taken fields - Department
+  const [deptActionPhotos, setDeptActionPhotos] = useState<ConcernImage[]>(
+    latestDept?.photos || []
+  )
+  const [deptActionNotes, setDeptActionNotes] = useState(latestDept?.notes || '')
+  const [deptActionOtherInfo, setDeptActionOtherInfo] = useState(latestDept?.otherInfo || '')
+  const [deptActionDate, setDeptActionDate] = useState<Date | undefined>(
+    latestDept && latestDept.actionDate !== 'Ongoing' 
+      ? new Date(latestDept.actionDate) 
+      : undefined
+  )
+  const [skipDeptActionDate, setSkipDeptActionDate] = useState(latestDept?.actionDate === 'Ongoing')
   
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const actionFileInputRef = useRef<HTMLInputElement>(null)
+  const pgoFileInputRef = useRef<HTMLInputElement>(null)
+  const deptFileInputRef = useRef<HTMLInputElement>(null)
 
   // Reset form when dialog opens (only when opening, not when concern updates)
   useEffect(() => {
     if (open) {
+      // Recalculate action data when opening
+      const pgo = concern.actionHistory?.filter(a => a.actionType === 'pgo') || []
+      const dept = concern.actionHistory?.filter(a => a.actionType === 'department') || []
+      const latestPgoAction = pgo.length > 0 ? pgo[pgo.length - 1] : null
+      const latestDeptAction = dept.length > 0 ? dept[dept.length - 1] : null
+      
       setDateReported(concern.dateReported)
       setMunicipality(concern.municipality)
       setCategory(concern.category)
@@ -88,14 +126,31 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       setCoordText(concern.coordinates || '')
       setCaseRemarks(concern.caseRemarks)
       setImages(concern.concernPhotos)
-      setActionPhotos(concern.actionTaken?.photos || [])
-      setActionNotes(concern.actionTaken?.notes || '')
-      setActionDate(
-        concern.actionDate && concern.actionDate !== 'Ongoing' 
-          ? new Date(concern.actionDate) 
+      
+      // PGO action
+      setPgoActionPhotos(latestPgoAction?.photos || [])
+      setPgoActionNotes(latestPgoAction?.notes || '')
+      setPgoActionOtherInfo(latestPgoAction?.otherInfo || '')
+      setPgoActionDate(
+        latestPgoAction && latestPgoAction.actionDate !== 'Ongoing' 
+          ? new Date(latestPgoAction.actionDate) 
           : undefined
       )
-      setSkipActionDate(concern.actionDate === 'Ongoing')
+      setSkipPgoActionDate(latestPgoAction?.actionDate === 'Ongoing')
+      
+      // Department action
+      setDeptActionPhotos(latestDeptAction?.photos || [])
+      setDeptActionNotes(latestDeptAction?.notes || '')
+      setDeptActionOtherInfo(latestDeptAction?.otherInfo || '')
+      setDeptActionDate(
+        latestDeptAction && latestDeptAction.actionDate !== 'Ongoing' 
+          ? new Date(latestDeptAction.actionDate) 
+          : undefined
+      )
+      setSkipDeptActionDate(latestDeptAction?.actionDate === 'Ongoing')
+      
+      // Set default tab
+      setSelectedActionTab(pgo.length > 0 ? 'pgo' : dept.length > 0 ? 'department' : 'pgo')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]) // Only depend on 'open', not 'concern'
@@ -190,7 +245,10 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     setIsCompressing(true)
     const newImages: (ConcernImage & { file?: File })[] = []
     
-    for (let i = 0; i < Math.min(files.length, 5 - actionPhotos.length); i++) {
+    const currentPhotos = selectedActionTab === 'pgo' ? pgoActionPhotos : deptActionPhotos
+    const setActionPhotos = selectedActionTab === 'pgo' ? setPgoActionPhotos : setDeptActionPhotos
+    
+    for (let i = 0; i < Math.min(files.length, 5 - currentPhotos.length); i++) {
       const file = files[i]
       if (file.type.startsWith('image/')) {
         const fileSizeInMB = file.size / 1024 / 1024
@@ -208,29 +266,38 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       }
     }
     
-    setActionPhotos([...actionPhotos, ...newImages] as ConcernImage[])
+    setActionPhotos([...currentPhotos, ...newImages] as ConcernImage[])
     setIsCompressing(false)
     
-    if (files.length + actionPhotos.length > 5) {
+    if (files.length + currentPhotos.length > 5) {
       toast.warning('Maximum 5 action photos allowed')
     }
   }
 
   const removeActionPhoto = (index: number) => {
-    const imageToRemove = actionPhotos[index]
+    const currentPhotos = selectedActionTab === 'pgo' ? pgoActionPhotos : deptActionPhotos
+    const setActionPhotos = selectedActionTab === 'pgo' ? setPgoActionPhotos : setDeptActionPhotos
+    const setActionNotes = selectedActionTab === 'pgo' ? setPgoActionNotes : setDeptActionNotes
+    const setActionOtherInfo = selectedActionTab === 'pgo' ? setPgoActionOtherInfo : setDeptActionOtherInfo
+    const setActionDate = selectedActionTab === 'pgo' ? setPgoActionDate : setDeptActionDate
+    const setSkipActionDate = selectedActionTab === 'pgo' ? setSkipPgoActionDate : setSkipDeptActionDate
+    
+    const imageToRemove = currentPhotos[index]
     // Clean up object URL to prevent memory leak
     if (imageToRemove.url.startsWith('blob:')) {
       URL.revokeObjectURL(imageToRemove.url)
     }
-    const newActionPhotos = actionPhotos.filter((_, i) => i !== index)
+    const newActionPhotos = currentPhotos.filter((_, i) => i !== index)
     setActionPhotos(newActionPhotos)
     
-    // If removing the last photo, also clear action notes and date
+    // If removing the last photo, also clear action notes and date for this action type
     if (newActionPhotos.length === 0) {
       setActionNotes('')
+      setActionOtherInfo('')
       setActionDate(undefined)
       setSkipActionDate(false)
-      toast.info('All action data cleared - status will be set to pending')
+      const actionLabel = selectedActionTab === 'pgo' ? 'PGO' : 'Department'
+      toast.info(`${actionLabel} action data cleared`)
     }
   }
 
@@ -243,13 +310,18 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           URL.revokeObjectURL(image.url)
         }
       })
-      actionPhotos.forEach(image => {
+      pgoActionPhotos.forEach(image => {
+        if (image.url.startsWith('blob:')) {
+          URL.revokeObjectURL(image.url)
+        }
+      })
+      deptActionPhotos.forEach(image => {
         if (image.url.startsWith('blob:')) {
           URL.revokeObjectURL(image.url)
         }
       })
     }
-  }, [images, actionPhotos])
+  }, [images, pgoActionPhotos, deptActionPhotos])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -286,7 +358,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                 url: result.url!,
                 publicId: result.publicId!,
               })
-              setUploadProgress(((i + 1) / totalImages) * 50) // First 50% for concern images
+              setUploadProgress(((i + 1) / totalImages) * 33) // First 33% for concern images
             } else {
               throw new Error(`Failed to upload concern image ${i + 1}`)
             }
@@ -294,32 +366,59 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         }
       }
       
-      // Upload new action photos to Cloudinary
-      const uploadedActionPhotos: { url: string; publicId: string }[] = []
-      const newActionPhotosToUpload = actionPhotos.filter(img => (img as ConcernImage & { file?: File }).file)
-      const existingActionPhotos = actionPhotos.filter(img => !(img as ConcernImage & { file?: File }).file)
+      // Upload PGO action photos
+      const uploadedPgoActionPhotos: { url: string; publicId: string }[] = []
+      const newPgoPhotosToUpload = pgoActionPhotos.filter(img => (img as ConcernImage & { file?: File }).file)
+      const existingPgoPhotos = pgoActionPhotos.filter(img => !(img as ConcernImage & { file?: File }).file)
       
-      // Add existing action photos
-      uploadedActionPhotos.push(...existingActionPhotos)
+      uploadedPgoActionPhotos.push(...existingPgoPhotos)
       
-      // Upload new action photos
-      if (newActionPhotosToUpload.length > 0) {
-        const totalActionPhotos = newActionPhotosToUpload.length
+      if (newPgoPhotosToUpload.length > 0) {
+        const totalPgoPhotos = newPgoPhotosToUpload.length
         
-        for (let i = 0; i < newActionPhotosToUpload.length; i++) {
-          const image = newActionPhotosToUpload[i]
+        for (let i = 0; i < newPgoPhotosToUpload.length; i++) {
+          const image = newPgoPhotosToUpload[i]
           const file = (image as ConcernImage & { file?: File }).file
           if (file) {
-            toast.info(`Uploading action photo ${i + 1} of ${totalActionPhotos}...`)
+            toast.info(`Uploading PGO action photo ${i + 1} of ${totalPgoPhotos}...`)
             const result = await uploadToCloudinary(file)
             if (result.success) {
-              uploadedActionPhotos.push({
+              uploadedPgoActionPhotos.push({
                 url: result.url!,
                 publicId: result.publicId!,
               })
-              setUploadProgress(50 + ((i + 1) / totalActionPhotos) * 50) // Last 50% for action photos
+              setUploadProgress(33 + ((i + 1) / totalPgoPhotos) * 33) // Middle 33%
             } else {
-              throw new Error(`Failed to upload action photo ${i + 1}`)
+              throw new Error(`Failed to upload PGO photo ${i + 1}`)
+            }
+          }
+        }
+      }
+      
+      // Upload Department action photos
+      const uploadedDeptActionPhotos: { url: string; publicId: string }[] = []
+      const newDeptPhotosToUpload = deptActionPhotos.filter(img => (img as ConcernImage & { file?: File }).file)
+      const existingDeptPhotos = deptActionPhotos.filter(img => !(img as ConcernImage & { file?: File }).file)
+      
+      uploadedDeptActionPhotos.push(...existingDeptPhotos)
+      
+      if (newDeptPhotosToUpload.length > 0) {
+        const totalDeptPhotos = newDeptPhotosToUpload.length
+        
+        for (let i = 0; i < newDeptPhotosToUpload.length; i++) {
+          const image = newDeptPhotosToUpload[i]
+          const file = (image as ConcernImage & { file?: File }).file
+          if (file) {
+            toast.info(`Uploading Department action photo ${i + 1} of ${totalDeptPhotos}...`)
+            const result = await uploadToCloudinary(file)
+            if (result.success) {
+              uploadedDeptActionPhotos.push({
+                url: result.url!,
+                publicId: result.publicId!,
+              })
+              setUploadProgress(66 + ((i + 1) / totalDeptPhotos) * 34) // Last 34%
+            } else {
+              throw new Error(`Failed to upload Department photo ${i + 1}`)
             }
           }
         }
@@ -344,41 +443,104 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
         updateData.coordinates = null
       }
       
-      // Check if user has any action data (be very strict)
-      const hasActionPhotos = uploadedActionPhotos.length > 0
-      const hasActionNotes = actionNotes.trim().length > 0
-      const hasActionData = hasActionPhotos || hasActionNotes
+      // Build actionHistory array
+      const newActionHistory: ActionRecord[] = []
       
-      console.log('Edit Submit Debug:', {
-        hasActionPhotos,
-        hasActionNotes,
-        hasActionData,
-        uploadedActionPhotos,
-        actionNotes: `"${actionNotes}"`,
-        actionNotesTrimmed: `"${actionNotes.trim()}"`
-      })
+      // Check PGO action data
+      const hasPgoPhotos = uploadedPgoActionPhotos.length > 0
+      const hasPgoNotes = pgoActionNotes.trim().length > 0
+      const hasPgoData = hasPgoPhotos || hasPgoNotes
       
-      // Update or remove action taken
-      if (hasActionData) {
-        // User has action data - update it
-        updateData.actionTaken = {
-          photos: uploadedActionPhotos,
-          notes: actionNotes.trim(),
-          submittedBy: concern.actionTaken?.submittedBy || 'Unknown',
-          submittedAt: concern.actionTaken?.submittedAt || new Date().toISOString(),
-        }
-        // Update action date
-        updateData.actionDate = skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : null)
-        console.log('Keeping action data, status unchanged')
-      } else {
-        // No action data - explicitly remove it and set status to pending
-        updateData.actionTaken = null
-        updateData.actionDate = null
-        updateData.status = 'pending'
-        console.log('Removing action data, setting status to pending')
+      if (hasPgoData && latestPgo) {
+        // Update existing PGO action
+        newActionHistory.push({
+          ...latestPgo,
+          photos: uploadedPgoActionPhotos,
+          notes: pgoActionNotes.trim(),
+          otherInfo: pgoActionOtherInfo.trim() || undefined,
+          actionDate: skipPgoActionDate ? 'Ongoing' : (pgoActionDate ? format(pgoActionDate, 'yyyy-MM-dd') : latestPgo.actionDate),
+        })
+      } else if (hasPgoData && !latestPgo) {
+        // Create new PGO action
+        newActionHistory.push({
+          actionId: `pgo-${Date.now()}`,
+          actionType: 'pgo' as ActionType,
+          photos: uploadedPgoActionPhotos,
+          notes: pgoActionNotes.trim(),
+          otherInfo: pgoActionOtherInfo.trim() || undefined,
+          submittedBy: 'Admin',
+          submittedAt: new Date().toISOString(),
+          actionDate: skipPgoActionDate ? 'Ongoing' : (pgoActionDate ? format(pgoActionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
+        })
+      } else if (latestPgo && !hasPgoData) {
+        // User removed PGO action - don't include it
+        toast.info('PGO action removed')
       }
       
-      console.log('Update data being sent to Firestore:', updateData)
+      // Check Department action data
+      const hasDeptPhotos = uploadedDeptActionPhotos.length > 0
+      const hasDeptNotes = deptActionNotes.trim().length > 0
+      const hasDeptData = hasDeptPhotos || hasDeptNotes
+      
+      if (hasDeptData && latestDept) {
+        // Update existing Department action
+        newActionHistory.push({
+          ...latestDept,
+          photos: uploadedDeptActionPhotos,
+          notes: deptActionNotes.trim(),
+          otherInfo: deptActionOtherInfo.trim() || undefined,
+          actionDate: skipDeptActionDate ? 'Ongoing' : (deptActionDate ? format(deptActionDate, 'yyyy-MM-dd') : latestDept.actionDate),
+        })
+      } else if (hasDeptData && !latestDept) {
+        // Create new Department action
+        newActionHistory.push({
+          actionId: `dept-${Date.now()}`,
+          actionType: 'department' as ActionType,
+          photos: uploadedDeptActionPhotos,
+          notes: deptActionNotes.trim(),
+          otherInfo: deptActionOtherInfo.trim() || undefined,
+          submittedBy: 'Admin',
+          submittedAt: new Date().toISOString(),
+          actionDate: skipDeptActionDate ? 'Ongoing' : (deptActionDate ? format(deptActionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
+        })
+      } else if (latestDept && !hasDeptData) {
+        // User removed Department action - don't include it
+        toast.info('Department action removed')
+      }
+      
+      // Update actionHistory and tracking fields
+      updateData.actionHistory = newActionHistory
+      updateData.pgoInvolved = newActionHistory.some(a => a.actionType === 'pgo')
+      updateData.hasPgoAction = newActionHistory.some(a => a.actionType === 'pgo')
+      updateData.hasDepartmentAction = newActionHistory.some(a => a.actionType === 'department')
+      updateData.latestActionType = newActionHistory.length > 0 
+        ? newActionHistory[newActionHistory.length - 1].actionType 
+        : undefined
+      
+      // Determine latest action date for actionDate field
+      if (newActionHistory.length > 0) {
+        const latestAction = newActionHistory[newActionHistory.length - 1]
+        updateData.actionDate = latestAction.actionDate
+      } else {
+        updateData.actionDate = null
+      }
+      
+      // Keep legacy actionTaken for backwards compatibility
+      if (newActionHistory.length > 0) {
+        const latestAction = newActionHistory[newActionHistory.length - 1]
+        updateData.actionTaken = {
+          photos: latestAction.photos,
+          notes: latestAction.notes,
+          otherInfo: latestAction.otherInfo,
+          submittedBy: latestAction.submittedBy,
+          submittedAt: latestAction.submittedAt,
+        }
+      } else {
+        updateData.actionTaken = null
+        updateData.status = 'pending'
+      }
+      
+      console.log('Edit Submit - Update data:', updateData)
       
       // Update Firestore
       const concernRef = doc(db, collectionName, concern.id)
@@ -399,6 +561,142 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Render function for action fields based on type
+  const renderActionFields = (actionType: 'pgo' | 'department') => {
+    const photos = actionType === 'pgo' ? pgoActionPhotos : deptActionPhotos
+    const notes = actionType === 'pgo' ? pgoActionNotes : deptActionNotes
+    const otherInfo = actionType === 'pgo' ? pgoActionOtherInfo : deptActionOtherInfo
+    const actionDateValue = actionType === 'pgo' ? pgoActionDate : deptActionDate
+    const skipDate = actionType === 'pgo' ? skipPgoActionDate : skipDeptActionDate
+    const setPhotos = actionType === 'pgo' ? setPgoActionPhotos : setDeptActionPhotos
+    const setNotes = actionType === 'pgo' ? setPgoActionNotes : setDeptActionNotes
+    const setOtherInfo = actionType === 'pgo' ? setPgoActionOtherInfo : setDeptActionOtherInfo
+    const setActionDateValue = actionType === 'pgo' ? setPgoActionDate : setDeptActionDate
+    const setSkipDate = actionType === 'pgo' ? setSkipPgoActionDate : setSkipDeptActionDate
+    const fileInputRef = actionType === 'pgo' ? pgoFileInputRef : deptFileInputRef
+    const label = actionType === 'pgo' ? '🟣 PGO' : '🏢 Department'
+
+    return (
+      <>
+        <div className="space-y-2">
+          <Label>{label} Action Files (Max 5)</Label>
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+            {photos.map((image, index) => (
+              <Card key={index} className="relative p-2">
+                {image.fileType === 'document' ? (
+                  <div className="w-full h-24 flex flex-col items-center justify-center bg-muted rounded">
+                    <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 text-blue-600" />
+                    <p className="text-[10px] text-center mt-1 px-1 truncate w-full">
+                      {image.fileName || 'Document'}
+                    </p>
+                    {image.fileSize && (
+                      <p className="text-[9px] text-muted-foreground">
+                        {(image.fileSize / 1024 / 1024).toFixed(2)}MB
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <img src={image.url} alt={`Action ${index + 1}`} className="w-full h-24 object-cover rounded" />
+                )}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon-xs"
+                  className="absolute top-1 right-1"
+                  onClick={() => removeActionPhoto(index)}
+                  disabled={isSubmitting}
+                >
+                  <HugeiconsIcon icon={Delete02Icon} className="w-3 h-3" />
+                </Button>
+              </Card>
+            ))}
+            
+            {photos.length < 5 && (
+              <Card
+                className="p-2 h-28 flex items-center justify-center cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="text-center">
+                  <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 mx-auto text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground mt-1">Add File</p>
+                </div>
+              </Card>
+            )}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            multiple
+            className="hidden"
+            onChange={(e) => handleActionFileSelect(e.target.files)}
+            disabled={isSubmitting}
+          />
+          <p className="text-xs text-muted-foreground">
+            Click to add, remove, or replace action files (images/documents)
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${actionType}ActionNotes`}>{label} Action Notes</Label>
+          <Textarea
+            id={`${actionType}ActionNotes`}
+            placeholder={`${label} action notes...`}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            disabled={isSubmitting}
+            rows={4}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${actionType}OtherInfo`}>{label} Other Information (Optional)</Label>
+          <Textarea
+            id={`${actionType}OtherInfo`}
+            placeholder="Additional information..."
+            value={otherInfo}
+            onChange={(e) => setOtherInfo(e.target.value)}
+            disabled={isSubmitting}
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${actionType}ActionDate`}>{label} Action Date {!skipDate && '*'}</Label>
+          <DatePicker
+            date={actionDateValue}
+            onDateChange={setActionDateValue}
+            placeholder="Select action date"
+            disabled={isSubmitting || skipDate}
+            maxDate={new Date()}
+          />
+          <div className="flex items-center space-x-2 mt-2">
+            <Checkbox 
+              id={`${actionType}SkipActionDate`}
+              checked={skipDate}
+              onCheckedChange={(checked) => {
+                setSkipDate(checked as boolean)
+                if (checked) setActionDateValue(undefined)
+              }}
+              disabled={isSubmitting}
+            />
+            <label
+              htmlFor={`${actionType}SkipActionDate`}
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            >
+              No specific date (Ongoing)
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {skipDate 
+              ? 'Action date will be marked as "Ongoing"' 
+              : 'Select the date when the action was taken'}
+          </p>
+        </div>
+      </>
+    )
   }
 
   return (
@@ -617,116 +915,40 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
                   </p>
                 </div>
 
-                {/* Action Taken Photos Section */}
-                {concern.actionTaken && (
+                {/* Action Taken Photos Section with Tabs */}
+                {(hasPgoAction || hasDeptAction) && (
                   <>
                     <div className="border-t pt-6">
-                      <h3 className="text-lg font-semibold mb-4">Action Taken</h3>
+                      <h3 className="text-lg font-semibold mb-4">Edit Action Taken</h3>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>Action Files (Max 5)</Label>
-                      <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                        {actionPhotos.map((image, index) => (
-                          <Card key={index} className="relative p-2">
-                            {image.fileType === 'document' ? (
-                              <div className="w-full h-24 flex flex-col items-center justify-center bg-muted rounded">
-                                <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 text-blue-600" />
-                                <p className="text-[10px] text-center mt-1 px-1 truncate w-full">
-                                  {image.fileName || 'Document'}
-                                </p>
-                                {image.fileSize && (
-                                  <p className="text-[9px] text-muted-foreground">
-                                    {(image.fileSize / 1024 / 1024).toFixed(2)}MB
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <img src={image.url} alt={`Action ${index + 1}`} className="w-full h-24 object-cover rounded" />
-                            )}
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="icon-xs"
-                              className="absolute top-1 right-1"
-                              onClick={() => removeActionPhoto(index)}
-                              disabled={isSubmitting}
-                            >
-                              <HugeiconsIcon icon={Delete02Icon} className="w-3 h-3" />
-                            </Button>
-                          </Card>
-                        ))}
+                    {hasBothActions ? (
+                      <Tabs value={selectedActionTab} onValueChange={(v) => setSelectedActionTab(v as ActionType)} className="w-full">
+                        <TabsList variant="line" className="w-full justify-start">
+                          <TabsTrigger value="pgo">
+                            <span className="mr-1.5">🟣</span>
+                            PGO Action
+                          </TabsTrigger>
+                          <TabsTrigger value="department">
+                            <span className="mr-1.5">🏢</span>
+                            Department Action
+                          </TabsTrigger>
+                        </TabsList>
                         
-                        {actionPhotos.length < 5 && (
-                          <Card
-                            className="p-2 h-28 flex items-center justify-center cursor-pointer hover:bg-muted transition-colors"
-                            onClick={() => actionFileInputRef.current?.click()}
-                          >
-                            <div className="text-center">
-                              <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 mx-auto text-muted-foreground" />
-                              <p className="text-xs text-muted-foreground mt-1">Add File</p>
-                            </div>
-                          </Card>
-                        )}
+                        <TabsContent value="pgo" className="space-y-4 mt-4">
+                          {renderActionFields('pgo')}
+                        </TabsContent>
+                        
+                        <TabsContent value="department" className="space-y-4 mt-4">
+                          {renderActionFields('department')}
+                        </TabsContent>
+                      </Tabs>
+                    ) : (
+                      <div className="space-y-4">
+                        {hasPgoAction && renderActionFields('pgo')}
+                        {hasDeptAction && renderActionFields('department')}
                       </div>
-                      <input
-                        ref={actionFileInputRef}
-                        type="file"
-                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => handleActionFileSelect(e.target.files)}
-                        disabled={isSubmitting}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Click to add, remove, or replace action files (images/documents)
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="actionNotes">Action Notes</Label>
-                      <Textarea
-                        id="actionNotes"
-                        placeholder="Update action notes..."
-                        value={actionNotes}
-                        onChange={(e) => setActionNotes(e.target.value)}
-                        disabled={isSubmitting}
-                        rows={4}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="actionDate">Action Date {!skipActionDate && '*'}</Label>
-                      <DatePicker
-                        date={actionDate}
-                        onDateChange={setActionDate}
-                        placeholder="Select action date"
-                        disabled={isSubmitting || skipActionDate}
-                        maxDate={new Date()}
-                      />
-                      <div className="flex items-center space-x-2 mt-2">
-                        <Checkbox 
-                          id="skipActionDate" 
-                          checked={skipActionDate}
-                          onCheckedChange={(checked) => {
-                            setSkipActionDate(checked as boolean)
-                            if (checked) setActionDate(undefined)
-                          }}
-                          disabled={isSubmitting}
-                        />
-                        <label
-                          htmlFor="skipActionDate"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          No specific date (Ongoing)
-                        </label>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {skipActionDate 
-                          ? 'Action date will be marked as "Ongoing"' 
-                          : 'Select the date when the action was taken'}
-                      </p>
-                    </div>
+                    )}
                   </>
                 )}
 

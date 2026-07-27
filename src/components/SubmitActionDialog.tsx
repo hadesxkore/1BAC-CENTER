@@ -265,16 +265,30 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       const concernRef = doc(db, collectionName, concernId)
       const concernDoc = await getDoc(concernRef)
       const existingData = concernDoc.data()
-      const existingHistory = existingData?.actionHistory || []
+      let existingHistory = existingData?.actionHistory || []
+      
+      // BACKWARD COMPATIBILITY: If no actionHistory but actionTaken exists, convert it
+      if (existingHistory.length === 0 && existingData?.actionTaken) {
+        const legacyAction = {
+          actionId: `legacy_${Date.now()}`,
+          actionType: 'department' as const,
+          photos: existingData.actionTaken.photos || [],
+          notes: existingData.actionTaken.notes || '',
+          otherInfo: existingData.actionTaken.otherInfo || '',
+          submittedBy: existingData.actionTaken.submittedBy || 'Unknown',
+          submittedAt: existingData.actionTaken.submittedAt || new Date().toISOString(),
+          actionDate: existingData.actionDate || format(new Date(), 'yyyy-MM-dd'),
+        }
+        existingHistory = [legacyAction]
+      }
       
       // NEW: Calculate PGO involvement flags
       const updatedHistory = [...existingHistory, actionRecord]
       const hasPgo = updatedHistory.some(a => a.actionType === 'pgo')
       const hasDept = updatedHistory.some(a => a.actionType === 'department')
 
-      // Update Firestore document with both old and new structure
-      await updateDoc(concernRef, {
-        actionTaken: actionTakenData, // Keep for backward compatibility
+      // Prepare update data
+      const updateData: any = {
         actionDate: skipActionDate ? 'Ongoing' : (actionDate ? format(actionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
         status: finalStatus,
         updatedAt: serverTimestamp(),
@@ -283,8 +297,17 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         pgoInvolved: hasPgo,
         hasPgoAction: hasPgo,
         hasDepartmentAction: hasDept,
-        latestActionType: isPgoAction ? 'pgo' : 'department',
-      })
+        latestActionType: forcePgoAction ? 'pgo' : (isPgoAction ? 'pgo' : 'department'),
+      }
+
+      // Only set actionTaken if it doesn't exist (for backward compatibility)
+      // Don't overwrite existing actionTaken to preserve the first action
+      if (!existingData?.actionTaken) {
+        updateData.actionTaken = actionTakenData
+      }
+
+      // Update Firestore document
+      await updateDoc(concernRef, updateData)
       
       // Call parent callback if provided
       if (onSubmit) {

@@ -457,7 +457,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           ...latestPgo,
           photos: uploadedPgoActionPhotos,
           notes: pgoActionNotes.trim(),
-          otherInfo: pgoActionOtherInfo.trim() || undefined,
+          otherInfo: pgoActionOtherInfo.trim() || '',
           actionDate: skipPgoActionDate ? 'Ongoing' : (pgoActionDate ? format(pgoActionDate, 'yyyy-MM-dd') : latestPgo.actionDate),
         })
       } else if (hasPgoData && !latestPgo) {
@@ -467,7 +467,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           actionType: 'pgo' as ActionType,
           photos: uploadedPgoActionPhotos,
           notes: pgoActionNotes.trim(),
-          otherInfo: pgoActionOtherInfo.trim() || undefined,
+          otherInfo: pgoActionOtherInfo.trim() || '',
           submittedBy: 'Admin',
           submittedAt: new Date().toISOString(),
           actionDate: skipPgoActionDate ? 'Ongoing' : (pgoActionDate ? format(pgoActionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
@@ -488,7 +488,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           ...latestDept,
           photos: uploadedDeptActionPhotos,
           notes: deptActionNotes.trim(),
-          otherInfo: deptActionOtherInfo.trim() || undefined,
+          otherInfo: deptActionOtherInfo.trim() || '',
           actionDate: skipDeptActionDate ? 'Ongoing' : (deptActionDate ? format(deptActionDate, 'yyyy-MM-dd') : latestDept.actionDate),
         })
       } else if (hasDeptData && !latestDept) {
@@ -498,7 +498,7 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
           actionType: 'department' as ActionType,
           photos: uploadedDeptActionPhotos,
           notes: deptActionNotes.trim(),
-          otherInfo: deptActionOtherInfo.trim() || undefined,
+          otherInfo: deptActionOtherInfo.trim() || '',
           submittedBy: 'Admin',
           submittedAt: new Date().toISOString(),
           actionDate: skipDeptActionDate ? 'Ongoing' : (deptActionDate ? format(deptActionDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
@@ -530,19 +530,21 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
       }
       
       // Keep legacy actionTaken for backwards compatibility
-      if (newActionHistory.length > 0) {
-        const latestAction = newActionHistory[newActionHistory.length - 1]
+      // Only update if it doesn't exist - preserve the first action
+      if (newActionHistory.length > 0 && !concern.actionTaken) {
+        const firstAction = newActionHistory[0]
         updateData.actionTaken = {
-          photos: latestAction.photos,
-          notes: latestAction.notes,
-          otherInfo: latestAction.otherInfo,
-          submittedBy: latestAction.submittedBy,
-          submittedAt: latestAction.submittedAt,
+          photos: firstAction.photos,
+          notes: firstAction.notes,
+          otherInfo: firstAction.otherInfo,
+          submittedBy: firstAction.submittedBy,
+          submittedAt: firstAction.submittedAt,
         }
-      } else {
+      } else if (newActionHistory.length === 0) {
         updateData.actionTaken = null
         updateData.status = 'pending'
       }
+      // If actionTaken exists, don't touch it - preserve original
       
       console.log('Edit Submit - Update data:', updateData)
       
@@ -585,8 +587,28 @@ export function EditConcernDialog({ concern, collectionName = 'concerns' }: Edit
     return (
       <>
         <div className="space-y-2">
-          <Label>{label} Action Files (Max 5)</Label>
-          <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+          <Label>{label} Action Files (Max 5, Ctrl+V to paste)</Label>
+          <div 
+            className="grid grid-cols-3 md:grid-cols-5 gap-2"
+            onPaste={(e) => {
+              const items = e.clipboardData?.items
+              if (!items) return
+              
+              const files: File[] = []
+              for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                  const file = items[i].getAsFile()
+                  if (file) files.push(file)
+                }
+              }
+              
+              if (files.length > 0) {
+                const dt = new DataTransfer()
+                files.forEach(file => dt.items.add(file))
+                handleActionFileSelect(dt.files)
+              }
+            }}
+          >
             {photos.map((image, index) => (
               <Card key={index} className="relative p-2">
                 {image.fileType === 'document' ? (

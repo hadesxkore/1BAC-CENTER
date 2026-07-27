@@ -173,6 +173,14 @@ export default function PGO() {
           createdAt: data.createdAt instanceof Timestamp 
             ? data.createdAt.toDate().toISOString()
             : new Date().toISOString(),
+          // PGO tracking fields
+          actionHistory: data.actionHistory || [],
+          pgoInvolved: data.pgoInvolved || false,
+          hasPgoAction: data.hasPgoAction || false,
+          hasDepartmentAction: data.hasDepartmentAction || 
+            !!(data.actionHistory && data.actionHistory.some((a: any) => a.actionType === 'department')) ||
+            !!data.actionTaken, // Backward compatibility: if actionTaken exists, department has acted
+          latestActionType: data.latestActionType,
         })
       })
       setReports(reportsData)

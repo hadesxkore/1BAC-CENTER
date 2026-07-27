@@ -178,7 +178,9 @@ export default function ActionCenter() {
           actionHistory: data.actionHistory || [],
           pgoInvolved: data.pgoInvolved || false,
           hasPgoAction: data.hasPgoAction || false,
-          hasDepartmentAction: data.hasDepartmentAction || false,
+          hasDepartmentAction: data.hasDepartmentAction || 
+            !!(data.actionHistory && data.actionHistory.some((a: any) => a.actionType === 'department')) ||
+            !!data.actionTaken, // Backward compatibility: if actionTaken exists, department has acted
           latestActionType: data.latestActionType,
         })
       })
@@ -459,11 +461,18 @@ export default function ActionCenter() {
       accessorKey: 'actionTaken',
       header: 'Action Taken',
       cell: ({ row }) => {
-        const actionTaken = row.original.actionTaken
+        // NEW: Get department action from actionHistory (or fall back to legacy actionTaken)
+        const actionHistory = row.original.actionHistory || []
+        const deptActions = actionHistory.filter(a => a.actionType === 'department')
+        const deptAction = deptActions.length > 0 ? deptActions[deptActions.length - 1] : null
+        const legacyActionTaken = row.original.actionTaken
+        
+        // Use department action from history, or fall back to legacy actionTaken
+        const actionToShow = deptAction || legacyActionTaken
         const status = row.original.status
         
         // Show Submit Action button if no action taken OR status needs action
-        if (!actionTaken || status === 'pending' || status === 'under-action' || status === 'in-progress') {
+        if (!actionToShow || status === 'pending' || status === 'under-action' || status === 'in-progress') {
           return (
             <SubmitActionDialog
               concernId={row.original.id}
@@ -473,10 +482,10 @@ export default function ActionCenter() {
         }
         
         // If there are photos, show them as clickable
-        if (actionTaken.photos && actionTaken.photos.length > 0) {
+        if (actionToShow.photos && actionToShow.photos.length > 0) {
           // Filter out documents and only show images
-          const imagePhotos = actionTaken.photos.filter(p => p.fileType !== 'document')
-          const documentPhotos = actionTaken.photos.filter(p => p.fileType === 'document')
+          const imagePhotos = actionToShow.photos.filter(p => p.fileType !== 'document')
+          const documentPhotos = actionToShow.photos.filter(p => p.fileType === 'document')
           
           return (
             <div className="flex gap-1">
@@ -544,7 +553,7 @@ export default function ActionCenter() {
         
         // If no photos, show action notes with accordion-style dropdown
         const isExpanded = expandedRows.has(row.original.id + '-action')
-        const notes = actionTaken.notes || 'No notes provided'
+        const notes = actionToShow.notes || 'No notes provided'
         const isNotesLong = notes.length > 50
         
         const toggleExpand = () => {

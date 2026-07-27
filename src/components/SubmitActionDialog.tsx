@@ -25,11 +25,12 @@ interface SubmitActionDialogProps {
   concernTitle: string
   collectionName?: string
   forceDepartmentAction?: boolean
+  forcePgoAction?: boolean
   triggerAsMenuItem?: boolean
   onSubmit?: (actionData: { photos: ConcernImage[]; notes: string }) => void
 }
 
-export function SubmitActionDialog({ concernId, concernTitle, collectionName = 'concerns', forceDepartmentAction = false, triggerAsMenuItem = false, onSubmit }: SubmitActionDialogProps) {
+export function SubmitActionDialog({ concernId, concernTitle, collectionName = 'concerns', forceDepartmentAction = false, forcePgoAction = false, triggerAsMenuItem = false, onSubmit }: SubmitActionDialogProps) {
   const [open, setOpen] = useState(false)
   const [showUnlocatedConfirm, setShowUnlocatedConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -42,7 +43,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [actionStatus, setActionStatus] = useState<string>('resolved')
   const [skipActionDate, setSkipActionDate] = useState(false)
   const [images, setImages] = useState<ConcernImage[]>([])
-  const [isPgoAction, setIsPgoAction] = useState(false) // NEW: PGO toggle
+  const [isPgoAction, setIsPgoAction] = useState(forcePgoAction) // NEW: Initialize with forcePgoAction
   const { user } = useAppStore()
   
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -249,9 +250,9 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       const finalStatus = actionStatus
       
       // NEW: Create action record for history
-      const actionRecord = {
+      const actionRecord: ActionRecord = {
         actionId: `action_${Date.now()}`,
-        actionType: forceDepartmentAction ? 'department' : (isPgoAction ? 'pgo' : 'department'),
+        actionType: forcePgoAction ? 'pgo' : (forceDepartmentAction || !isPgoAction) ? 'department' : 'pgo',
         photos: uploadedImages,
         notes: notes.trim(),
         otherInfo: otherInfo.trim(),
@@ -331,7 +332,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
         {triggerAsMenuItem ? (
           <Button variant="ghost" size="sm" className="w-full justify-start">
             <HugeiconsIcon icon={FileAttachmentIcon} className="mr-2 h-4 w-4" />
-            Submit Department Action
+            {forcePgoAction ? 'Submit PGO Action' : 'Submit Department Action'}
           </Button>
         ) : (
           <Button size="sm" className="bg-blue-600 text-white hover:bg-blue-700">
@@ -341,14 +342,16 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       </DialogTrigger>
       <DialogContent className="max-w-[95vw] sm:max-w-[95vw] lg:max-w-2xl h-auto max-h-[85vh] p-0 flex flex-col gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>{forceDepartmentAction ? 'Submit Department Action' : 'Submit Action Taken'}</DialogTitle>
+          <DialogTitle>
+            {forcePgoAction ? 'Submit PGO Action' : forceDepartmentAction ? 'Submit Department Action' : 'Submit Action Taken'}
+          </DialogTitle>
           <DialogDescription>
             Upload photos and notes for: <strong className="text-foreground">{concernTitle}</strong>
           </DialogDescription>
         </DialogHeader>
         
-        {/* PGO Action Toggle - Hidden when forcing department action */}
-        {!forceDepartmentAction && (
+        {/* PGO Action Toggle - Hidden when forcing either action type */}
+        {!forceDepartmentAction && !forcePgoAction && (
           <div className="px-6 pt-4 pb-2 bg-muted/30 border-b">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -374,6 +377,27 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                       : 'Standard department action'}
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Show forced action type indicator */}
+        {(forceDepartmentAction || forcePgoAction) && (
+          <div className="px-6 pt-4 pb-2 bg-muted/30 border-b">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${forcePgoAction ? 'bg-purple-100 dark:bg-purple-900' : 'bg-blue-100 dark:bg-blue-900'}`}>
+                <span className="text-xl">{forcePgoAction ? '🟣' : '🏢'}</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold">
+                  {forcePgoAction ? 'PGO Action' : 'Department Action'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {forcePgoAction 
+                    ? 'This action will be marked as handled by PGO' 
+                    : 'This action will be marked as handled by Department'}
+                </p>
               </div>
             </div>
           </div>

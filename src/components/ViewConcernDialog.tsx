@@ -206,6 +206,19 @@ export function ViewConcernDialog({ action }: ViewConcernDialogProps) {
   const latestPgo = hasPgoAction ? pgoActions[pgoActions.length - 1] : null
   const latestDept = hasDeptAction ? deptActions[deptActions.length - 1] : null
   
+  // Backward compatibility: Check for legacy actionTaken field
+  const hasLegacyAction = !hasPgoAction && !hasDeptAction && action.actionTaken
+  const legacyActionRecord = hasLegacyAction ? {
+    actionId: 'legacy',
+    actionType: 'department' as const,
+    photos: action.actionTaken!.photos,
+    notes: action.actionTaken!.notes,
+    otherInfo: action.actionTaken!.otherInfo,
+    submittedBy: action.actionTaken!.submittedBy,
+    submittedAt: action.actionTaken!.submittedAt,
+    actionDate: action.actionDate || format(new Date(), 'yyyy-MM-dd'),
+  } : null
+  
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -375,6 +388,12 @@ export function ViewConcernDialog({ action }: ViewConcernDialogProps) {
                 <ActionDetailsView 
                   actionRecord={(latestPgo || latestDept)!} 
                   actionType={hasPgoAction ? 'pgo' : 'department'} 
+                />
+              ) : hasLegacyAction ? (
+                /* Legacy actionTaken - show as department action */
+                <ActionDetailsView 
+                  actionRecord={legacyActionRecord!} 
+                  actionType="department" 
                 />
               ) : (
                 /* No actions yet */

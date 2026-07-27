@@ -676,6 +676,15 @@ export default function ActionCenter() {
                   triggerAsMenuItem={true}
                 />
               )}
+              {row.original.hasDepartmentAction && !row.original.hasPgoAction && (
+                <SubmitActionDialog
+                  concernId={row.original.id}
+                  concernTitle={row.original.reportTitle}
+                  collectionName="concerns"
+                  forcePgoAction={true}
+                  triggerAsMenuItem={true}
+                />
+              )}
               {isInProgress && (
                 <MarkAsCompletedDialog 
                   concernId={row.original.id} 

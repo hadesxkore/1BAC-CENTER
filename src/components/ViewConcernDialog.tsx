@@ -391,15 +391,15 @@ export function ViewConcernDialog({ action }: ViewConcernDialogProps) {
               {/* SECTION 1: Concern Details */}
               <div className="rounded-lg border overflow-hidden">
                 <SectionHeader title="Concern Details" />
-                <div className="p-5 grid gap-6 md:grid-cols-[220px_1fr]">
+                <div className="p-5 grid gap-6 md:grid-cols-[320px_1fr]">
                   {/* Concern photos */}
-                  <div className="grid grid-cols-2 gap-2 self-start">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-3 self-start">
                     {action.concernPhotos.map((photo, index) => (
                       <a key={index} href={photo.url} target="_blank" rel="noopener noreferrer" className="block group">
                         <LazyImage
                           src={photo.url}
                           alt={`Concern ${index + 1}`}
-                          className="h-24 w-full rounded-md border object-cover group-hover:opacity-80"
+                          className="h-56 w-full rounded-md border object-cover group-hover:opacity-80"
                         />
                       </a>
                     ))}

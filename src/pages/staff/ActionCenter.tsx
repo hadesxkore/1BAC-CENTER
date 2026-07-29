@@ -69,6 +69,7 @@ import { MarkAsCompletedDialog } from '@/components/MarkAsCompletedDialog'
 import { UpdateStatusDialog } from '@/components/UpdateStatusDialog'
 import ExportPDFDialog from '@/components/ExportPDFDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
+import { GeneratePGOReportDialog } from '@/components/GeneratePGOReportDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp, doc, writeBatch, getDocs, where, setDoc } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
@@ -1423,6 +1424,9 @@ export default function ActionCenter() {
                     </Button>
                   </CollapsibleTrigger>
                   <div className="flex gap-2 items-center">
+                    {/* Generate PGO Report Button */}
+                    <GeneratePGOReportDialog concerns={filteredData} />
+                    
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className="w-[200px] h-8 text-sm justify-start font-normal">

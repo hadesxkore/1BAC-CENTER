@@ -468,12 +468,20 @@ export const generateCategorySummaryPDF = async (
   yPos += 8
 
   // Monthly concerns breakdown
-  checkNewPage(80)
+  console.log('[PDF DEBUG] Starting Monthly Breakdown section at yPos:', yPos, 'pageHeight:', pageHeight)
+  
+  // Force new page if less than 60mm remaining to ensure section visibility
+  if (yPos > pageHeight - 60) {
+    console.log('[PDF DEBUG] Creating new page for Monthly Breakdown')
+    doc.addPage()
+    yPos = margin
+  }
   
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(categoryColor[0], categoryColor[1], categoryColor[2])
   doc.text('MONTHLY CONCERNS BREAKDOWN', margin, yPos)
+  console.log('[PDF DEBUG] Monthly Breakdown header rendered at yPos:', yPos)
   yPos += 8
 
   // Calculate monthly data
@@ -483,6 +491,8 @@ export const generateCategorySummaryPDF = async (
     const monthKey = format(date, 'MMM yyyy')
     monthlyData[monthKey] = (monthlyData[monthKey] || 0) + 1
   })
+
+  console.log('[PDF DEBUG] Monthly data calculated:', monthlyData)
 
   // Sort by date (most recent first) and get last 12 months or all available
   const sortedMonths = Object.entries(monthlyData)
@@ -494,12 +504,21 @@ export const generateCategorySummaryPDF = async (
     .slice(0, 12)
     .reverse() // Show oldest to newest in chart
 
+  console.log('[PDF DEBUG] Sorted months:', sortedMonths.length, 'months')
+
   if (sortedMonths.length > 0) {
     const maxCount = Math.max(...sortedMonths.map(([_, count]) => count))
     const rowHeight = 8
     const maxBarWidth = pageWidth - 2 * margin - 35
 
     sortedMonths.forEach(([month, count], index) => {
+      // Only check for new page every 3 bars to avoid breaking chart mid-way
+      if (index % 3 === 0) {
+        checkNewPage(30)
+      }
+      
+      console.log(`[PDF DEBUG] Rendering bar ${index + 1}/${sortedMonths.length}: ${month} = ${count} at yPos ${yPos}`)
+      
       const barWidth = (count / maxCount) * maxBarWidth
       
       // Month label on left
@@ -528,6 +547,7 @@ export const generateCategorySummaryPDF = async (
       current[1] > max[1] ? current : max
     )
     
+    checkNewPage(10)
     doc.setFontSize(8)
     doc.setFont('helvetica', 'italic')
     doc.setTextColor(100, 100, 100)
@@ -536,11 +556,13 @@ export const generateCategorySummaryPDF = async (
       margin,
       yPos
     )
+    yPos += 6
   } else {
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(107, 114, 128)
     doc.text('No monthly data available', margin, yPos)
+    yPos += 6
   }
 
   yPos += 10

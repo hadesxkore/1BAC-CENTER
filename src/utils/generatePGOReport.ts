@@ -128,6 +128,10 @@ export async function generatePGOReport(concerns: Action[]): Promise<jsPDF> {
     preloadImages([logo1, logo2]),
   ])
 
+  // Log loading summary
+  console.log(`[PGO Report] Loaded ${imageCache.size} out of ${urls.size} concern images`)
+  console.log(`[PGO Report] Generating ${pgoInvolvedConcerns.length} page(s)...`)
+
   let isFirstPage = true
   for (const concern of pgoInvolvedConcerns) {
     if (!isFirstPage) doc.addPage()
@@ -143,10 +147,10 @@ export async function generatePGOReport(concerns: Action[]): Promise<jsPDF> {
 
 // Fetch + decode every image concurrently. Failures are swallowed per-image
 // (caller falls back to a placeholder box) so one bad URL can't slow/break
-// the rest.
+// the rest. Using concurrency limit of 3 for more reliable loading.
 async function preloadImages(urls: string[]): Promise<Map<string, string>> {
   const cache = new Map<string, string>()
-  await runWithConcurrencyLimit(urls, 5, async url => {
+  await runWithConcurrencyLimit(urls, 3, async url => {
     try {
       cache.set(url, await loadImage(url))
     } catch (err) {
@@ -566,11 +570,16 @@ function renderActionSection(doc: jsPDF, concern: Action, actionRecord: any, opt
 // fails ("tainted canvas") on some CORS setups even when the image itself
 // loads fine visually, which is what was causing "Image unavailable" on
 // pictures that clearly exist. fetch() gives the raw bytes directly.
-// Retries once on failure since bursts of many simultaneous requests can
+// Retries on failure since bursts of many simultaneous requests can
 // trip rate limits / connection limits on the image host.
 async function loadImage(url: string, attempt = 1): Promise<string> {
   try {
-    const response = await fetch(url, { mode: 'cors' })
+    // Add cache-busting parameter on retries to avoid cached failures
+    const fetchUrl = attempt > 1 ? `${url}${url.includes('?') ? '&' : '?'}_retry=${attempt}` : url
+    const response = await fetch(fetchUrl, { 
+      mode: 'cors',
+      cache: attempt === 1 ? 'default' : 'reload'
+    })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const blob = await response.blob()
     // A 200 response doesn't guarantee we actually got image bytes — an
@@ -588,10 +597,13 @@ async function loadImage(url: string, attempt = 1): Promise<string> {
       reader.readAsDataURL(blob)
     })
   } catch (err) {
+    // Retry with exponential backoff up to 3 attempts
     if (attempt < 3) {
-      await new Promise(r => setTimeout(r, 300 * attempt))
+      await new Promise(r => setTimeout(r, 500 * attempt))
       return loadImage(url, attempt + 1)
     }
+    // Log the failure with details for debugging
+    console.error(`[PGO Report] Failed to load image after ${attempt} attempts: ${url}`, err)
     throw err
   }
 }
@@ -599,13 +611,23 @@ async function loadImage(url: string, attempt = 1): Promise<string> {
 // Runs async tasks with a concurrency cap instead of firing everything at
 // once — large reports (many concerns × several photos each) were tripping
 // browser/server connection limits, causing otherwise-valid images to fail.
+// Reduced concurrency from 5 to 3 for more reliable loading.
 async function runWithConcurrencyLimit<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
   let index = 0
+  const errors: Error[] = []
   async function next(): Promise<void> {
     const current = index++
     if (current >= items.length) return
-    await worker(items[current])
+    try {
+      await worker(items[current])
+    } catch (err) {
+      errors.push(err as Error)
+    }
     await next()
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => next()))
+  // Log summary if there were failures
+  if (errors.length > 0) {
+    console.warn(`[PGO Report] ${errors.length} image(s) failed to load out of ${items.length} total`)
+  }
 }

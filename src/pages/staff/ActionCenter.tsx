@@ -55,6 +55,9 @@ import {
   MoreVerticalIcon,
   FilterIcon,
   Download01Icon,
+  Folder01Icon,
+  Image01Icon,
+  SparklesIcon,
 } from '@hugeicons/core-free-icons'
 import type { Action, ActionStatus } from '@/data/sampleActions'
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
@@ -70,6 +73,7 @@ import { UpdateStatusDialog } from '@/components/UpdateStatusDialog'
 import ExportPDFDialog from '@/components/ExportPDFDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { GeneratePGOReportDialog } from '@/components/GeneratePGOReportDialog'
+import { PioPhotosExportDialog } from '@/components/PioPhotosExportDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp, doc, writeBatch, getDocs, where, setDoc } from 'firebase/firestore'
 import { toast } from '@/components/ui/sonner'
@@ -141,6 +145,12 @@ export default function ActionCenter() {
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
   const [pendingCoordsRow, setPendingCoordsRow] = useState<Action | null>(null)
+  
+  // PIO Photos Export (ZIP Folder) Mode
+  const [isPioMode, setIsPioMode] = useState(false)
+  const [pioSelectedRows, setPioSelectedRows] = useState<Record<string, boolean>>({})
+  const [showPioExportDialog, setShowPioExportDialog] = useState(false)
+  const [singleExportConcern, setSingleExportConcern] = useState<Action | null>(null)
 
   // Real-time listener for concerns
   useEffect(() => {
@@ -676,6 +686,16 @@ export default function ActionCenter() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <ViewConcernDialog action={row.original} />
+              <button
+                onClick={() => {
+                  setSingleExportConcern(row.original)
+                  setShowPioExportDialog(true)
+                }}
+                className="flex items-center w-full px-2 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded cursor-pointer font-medium"
+              >
+                <HugeiconsIcon icon={Folder01Icon} className="w-3.5 h-3.5 mr-2" />
+                Export Photos for PIO (ZIP)
+              </button>
               <EditConcernDialog concern={row.original} />
               {row.original.pgoInvolved && !row.original.hasDepartmentAction && (
                 <SubmitActionDialog
@@ -1423,7 +1443,42 @@ export default function ActionCenter() {
                       Advanced Filters
                     </Button>
                   </CollapsibleTrigger>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {/* PIO Photos Export Mode Toggle Button */}
+                    <Button
+                      variant={isPioMode ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        const next = !isPioMode
+                        setIsPioMode(next)
+                        if (next) {
+                          toast.info('PIO Photos Export Mode Activated', {
+                            description: 'Click any rows to select concerns and download raw Before & After photos in a named ZIP folder.',
+                          })
+                        } else {
+                          setPioSelectedRows({})
+                          toast.info('PIO Photos Export Mode Deactivated')
+                        }
+                      }}
+                      className={
+                        isPioMode
+                          ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white border-blue-600 shadow-md ring-2 ring-blue-500/40 hover:from-blue-800 hover:to-indigo-800 cursor-pointer'
+                          : 'border-blue-400 text-blue-700 dark:border-blue-500/60 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer'
+                      }
+                    >
+                      <HugeiconsIcon icon={Folder01Icon} className="w-4 h-4 mr-1.5" />
+                      PIO Photos Mode
+                      <span
+                        className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          isPioMode
+                            ? 'bg-white/25 text-white'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                        }`}
+                      >
+                        {isPioMode ? 'ON' : 'OFF'}
+                      </span>
+                    </Button>
+
                     {/* Generate PGO Report Button */}
                     <GeneratePGOReportDialog concerns={filteredData} />
                     
@@ -1558,6 +1613,83 @@ export default function ActionCenter() {
               </Collapsible>
             </div>
 
+            {/* PIO Photos Export Mode Active Banner */}
+            {isPioMode && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-3.5 rounded-xl bg-gradient-to-r from-blue-950 via-indigo-950 to-blue-950 text-white border border-blue-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="p-2 rounded-lg bg-blue-600 text-white shadow-xs animate-pulse shrink-0">
+                    <HugeiconsIcon icon={Folder01Icon} className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <div className="font-bold text-xs sm:text-sm text-blue-100 flex items-center gap-2">
+                      <span>PIO Photos Export Mode Active</span>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-600/70 text-white text-[10px] font-mono">
+                        {Object.keys(pioSelectedRows).length} concern(s) selected
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-blue-300/80 mt-0.5">
+                      Click any row in the list to select concerns. You can rename the folder and download all raw Before & After photos inside a ZIP for PIO posting.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const all: Record<string, boolean> = {}
+                      filteredData.forEach((c) => { all[c.id] = true })
+                      setPioSelectedRows(all)
+                    }}
+                    className="h-8 text-xs bg-white/10 hover:bg-white/20 text-white border-white/20 cursor-pointer"
+                  >
+                    Select All ({filteredData.length})
+                  </Button>
+                  {Object.keys(pioSelectedRows).length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPioSelectedRows({})}
+                      className="h-8 text-xs text-blue-300 hover:text-white cursor-pointer"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (Object.keys(pioSelectedRows).length === 0) {
+                        toast.error('Please click on at least one row to select concerns.')
+                        return
+                      }
+                      setShowPioExportDialog(true)
+                    }}
+                    disabled={Object.keys(pioSelectedRows).length === 0}
+                    className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-md"
+                  >
+                    <HugeiconsIcon icon={Download01Icon} className="w-3.5 h-3.5 mr-1.5" />
+                    Download PIO ZIP ({Object.keys(pioSelectedRows).length})
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsPioMode(false)
+                      setPioSelectedRows({})
+                    }}
+                    className="h-8 text-xs text-blue-300/80 hover:text-white cursor-pointer"
+                  >
+                    Exit Mode
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
             {/* Table with horizontal scroll */}
             <div className="w-full overflow-x-auto">
               <div className="rounded-md border min-w-max">
@@ -1582,22 +1714,52 @@ export default function ActionCenter() {
                   </TableHeader>
                   <TableBody>
                     {table.getRowModel().rows?.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          data-state={row.getIsSelected() && 'selected'}
-                          className={row.original.pgoInvolved ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' : ''}
-                        >
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
+                      table.getRowModel().rows.map((row) => {
+                        const isPioSelected = !!pioSelectedRows[row.original.id]
+                        return (
+                          <TableRow
+                            key={row.id}
+                            data-state={row.getIsSelected() && 'selected'}
+                            onClick={(e) => {
+                              const target = e.target as HTMLElement
+                              if (
+                                target.closest('button') ||
+                                target.closest('input') ||
+                                target.closest('a') ||
+                                target.closest('[role="menuitem"]') ||
+                                target.closest('[data-radix-collection-item]')
+                              ) {
+                                return
+                              }
+                              if (isPioMode) {
+                                setPioSelectedRows((prev) => {
+                                  const next = { ...prev }
+                                  if (next[row.original.id]) {
+                                    delete next[row.original.id]
+                                  } else {
+                                    next[row.original.id] = true
+                                  }
+                                  return next
+                                })
+                              }
+                            }}
+                            className={`
+                              ${row.original.pgoInvolved ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''}
+                              ${isPioMode ? 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors' : ''}
+                              ${isPioSelected && isPioMode ? 'bg-blue-100/80 dark:bg-blue-900/50 border-l-4 border-l-blue-600 font-semibold shadow-2xs' : ''}
+                            `}
+                          >
+                            {row.getVisibleCells().map((cell) => (
+                              <TableCell key={cell.id}>
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext()
+                                )}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        )
+                      })
                     ) : (
                       <TableRow>
                         <TableCell
@@ -1647,6 +1809,21 @@ export default function ActionCenter() {
         onOpenChange={setShowCarousel}
         images={carouselImages}
         title={carouselTitle}
+      />
+
+      {/* PIO Raw Photos Export (ZIP Folder) Dialog */}
+      <PioPhotosExportDialog
+        concerns={
+          singleExportConcern
+            ? [singleExportConcern]
+            : concerns.filter((c) => pioSelectedRows[c.id])
+        }
+        open={showPioExportDialog}
+        onOpenChange={(open) => {
+          setShowPioExportDialog(open)
+          if (!open) setSingleExportConcern(null)
+        }}
+        onClearSelection={() => setPioSelectedRows({})}
       />
     </div>
   )

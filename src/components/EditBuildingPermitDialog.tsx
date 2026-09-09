@@ -199,6 +199,8 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
     setPhotos(photos.filter((_, i) => i !== index))
   }
 
+  const [hoveredSection, setHoveredSection] = useState<'before' | 'after' | null>(null)
+
   // Global paste handler when modal is open
   useEffect(() => {
     if (!open) return
@@ -209,14 +211,14 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
       if (isInput) return
 
       if (e.clipboardData) {
-        const targetType = beforePhotos.length < 5 ? 'before' : 'after'
+        const targetType = hoveredSection || (beforePhotos.length < 5 ? 'before' : 'after')
         handlePaste({ clipboardData: e.clipboardData }, targetType)
       }
     }
 
     window.addEventListener('paste', handleGlobalPaste)
     return () => window.removeEventListener('paste', handleGlobalPaste)
-  }, [open, beforePhotos.length, afterPhotos.length])
+  }, [open, hoveredSection, beforePhotos.length, afterPhotos.length])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -386,8 +388,14 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
                 </div>
                 <div
                   onPaste={(e) => handlePaste(e, 'before')}
+                  onMouseEnter={() => setHoveredSection('before')}
+                  onMouseLeave={() => setHoveredSection((prev) => (prev === 'before' ? null : prev))}
                   tabIndex={0}
-                  className="border-2 border-dashed rounded-lg p-4 transition-colors border-muted-foreground/25 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className={`border-2 border-dashed rounded-lg p-4 transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                    hoveredSection === 'before'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+                      : 'border-muted-foreground/25 hover:border-primary/50'
+                  }`}
                 >
                   <input
                     ref={beforeFileInputRef}
@@ -402,9 +410,11 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
                       onClick={() => beforeFileInputRef.current?.click()}
                       className="flex flex-col items-center justify-center py-6 cursor-pointer text-center"
                     >
-                      <HugeiconsIcon icon={Image02Icon} className="w-10 h-10 text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Click or paste images here (Ctrl+V)</p>
-                      <p className="text-xs text-muted-foreground mt-1">Copy an image or image URL from web and press Ctrl+V</p>
+                      <HugeiconsIcon icon={Image02Icon} className={`w-10 h-10 mb-2 transition-colors ${hoveredSection === 'before' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <p className="text-sm font-medium">Click or hover & paste (Ctrl+V)</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {hoveredSection === 'before' ? '📋 Ready! Press Ctrl+V to paste into Before photos' : 'Copy an image or image URL from web and press Ctrl+V while hovering'}
+                      </p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
@@ -443,8 +453,14 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
                 </div>
                 <div
                   onPaste={(e) => handlePaste(e, 'after')}
+                  onMouseEnter={() => setHoveredSection('after')}
+                  onMouseLeave={() => setHoveredSection((prev) => (prev === 'after' ? null : prev))}
                   tabIndex={0}
-                  className="border-2 border-dashed rounded-lg p-4 transition-colors border-muted-foreground/25 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className={`border-2 border-dashed rounded-lg p-4 transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                    hoveredSection === 'after'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+                      : 'border-muted-foreground/25 hover:border-primary/50'
+                  }`}
                 >
                   <input
                     ref={afterFileInputRef}
@@ -459,9 +475,11 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
                       onClick={() => afterFileInputRef.current?.click()}
                       className="flex flex-col items-center justify-center py-6 cursor-pointer text-center"
                     >
-                      <HugeiconsIcon icon={Image02Icon} className="w-10 h-10 text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Click or paste images here (Ctrl+V)</p>
-                      <p className="text-xs text-muted-foreground mt-1">Copy compliance photo from web or clipboard and press Ctrl+V</p>
+                      <HugeiconsIcon icon={Image02Icon} className={`w-10 h-10 mb-2 transition-colors ${hoveredSection === 'after' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <p className="text-sm font-medium">Click or hover & paste (Ctrl+V)</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {hoveredSection === 'after' ? '📋 Ready! Press Ctrl+V to paste into After photos' : 'Copy compliance photo from web and press Ctrl+V while hovering'}
+                      </p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">

@@ -128,24 +128,97 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
     }
   }
 
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items
-    if (!items) return
+  const handlePaste = async (e: React.ClipboardEvent | { clipboardData: DataTransfer }) => {
+    const clipboardData = e.clipboardData
+    if (!clipboardData) return
     
     const files: File[] = []
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const file = items[i].getAsFile()
-        if (file) files.push(file)
+
+    // 1. Direct image files in clipboard
+    if (clipboardData.items) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i]
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) files.push(file)
+        }
       }
     }
-    
+
+    // 2. Extract image URL or HTML <img> tag if copied from web
+    if (files.length === 0) {
+      const htmlText = clipboardData.getData('text/html')
+      const plainText = clipboardData.getData('text/plain')
+      let imageUrl: string | null = null
+
+      if (htmlText) {
+        const match = htmlText.match(/<img[^>]+src=["']([^"']+)["']/i)
+        if (match && match[1]) {
+          imageUrl = match[1]
+        }
+      }
+
+      if (!imageUrl && plainText) {
+        const trimmed = plainText.trim()
+        if (trimmed.startsWith('data:image/') || /^https?:\/\/.+/i.test(trimmed)) {
+          imageUrl = trimmed
+        }
+      }
+
+      if (imageUrl) {
+        try {
+          toast.info('Fetching image from pasted URL...')
+          let blob: Blob | null = null
+
+          if (imageUrl.startsWith('data:image/')) {
+            const res = await fetch(imageUrl)
+            blob = await res.blob()
+          } else {
+            const res = await fetch(imageUrl).catch(() => null)
+            if (res && res.ok) {
+              blob = await res.blob()
+            }
+          }
+
+          if (blob && blob.type.startsWith('image/')) {
+            const ext = blob.type.split('/')[1] || 'jpg'
+            const file = new File([blob], `pasted-image-${Date.now()}.${ext}`, { type: blob.type })
+            files.push(file)
+          } else {
+            toast.error('Could not load image directly. Try right-clicking image -> "Copy Image".')
+          }
+        } catch (err) {
+          console.error('Failed to fetch pasted image:', err)
+          toast.error('Failed to load image from URL')
+        }
+      }
+    }
+
     if (files.length > 0) {
       const dt = new DataTransfer()
       files.forEach(file => dt.items.add(file))
-      handleFileSelect(dt.files)
+      await handleFileSelect(dt.files)
+      toast.success(`Pasted ${files.length} image(s)!`)
     }
   }
+
+  // Global paste handler when dialog is open
+  useEffect(() => {
+    if (!open) return
+
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeElement = document.activeElement
+      const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
+      if (isInput) return
+
+      if (e.clipboardData) {
+        handlePaste({ clipboardData: e.clipboardData })
+      }
+    }
+
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
+  }, [open])
 
   const removeImage = (index: number) => {
     const imageToRemove = images[index]

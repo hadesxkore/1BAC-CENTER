@@ -39,6 +39,8 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [isHovered, setIsHovered] = useState(false)
+
   const handleFileSelect = async (files: FileList | null) => {
     if (!files) return
     
@@ -64,6 +66,98 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
     setAfterPhotos([...afterPhotos, ...newImages])
     setIsCompressing(false)
   }
+
+  const handlePaste = async (e: React.ClipboardEvent | { clipboardData: DataTransfer }) => {
+    const clipboardData = e.clipboardData
+    if (!clipboardData) return
+
+    const files: File[] = []
+
+    // 1. Direct image files in clipboard
+    if (clipboardData.items) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i]
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) files.push(file)
+        }
+      }
+    }
+
+    // 2. Extract image URL or HTML <img> tag if copied from web
+    if (files.length === 0) {
+      const htmlText = clipboardData.getData('text/html')
+      const plainText = clipboardData.getData('text/plain')
+      let imageUrl: string | null = null
+
+      if (htmlText) {
+        const match = htmlText.match(/<img[^>]+src=["']([^"']+)["']/i)
+        if (match && match[1]) {
+          imageUrl = match[1]
+        }
+      }
+
+      if (!imageUrl && plainText) {
+        const trimmed = plainText.trim()
+        if (trimmed.startsWith('data:image/') || /^https?:\/\/.+/i.test(trimmed)) {
+          imageUrl = trimmed
+        }
+      }
+
+      if (imageUrl) {
+        try {
+          toast.info('Fetching image from pasted URL...')
+          let blob: Blob | null = null
+
+          if (imageUrl.startsWith('data:image/')) {
+            const res = await fetch(imageUrl)
+            blob = await res.blob()
+          } else {
+            const res = await fetch(imageUrl).catch(() => null)
+            if (res && res.ok) {
+              blob = await res.blob()
+            }
+          }
+
+          if (blob && blob.type.startsWith('image/')) {
+            const ext = blob.type.split('/')[1] || 'jpg'
+            const file = new File([blob], `pasted-image-${Date.now()}.${ext}`, { type: blob.type })
+            files.push(file)
+          } else {
+            toast.error('Could not load image directly. Try right-clicking image -> "Copy Image".')
+          }
+        } catch (err) {
+          console.error('Failed to fetch pasted image:', err)
+          toast.error('Failed to load image from URL')
+        }
+      }
+    }
+
+    if (files.length > 0) {
+      const dt = new DataTransfer()
+      files.forEach(file => dt.items.add(file))
+      await handleFileSelect(dt.files)
+      toast.success(`Pasted ${files.length} after photo(s)!`)
+    }
+  }
+
+  // Global paste handler when modal is open
+  useEffect(() => {
+    if (!open) return
+
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeElement = document.activeElement
+      const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
+      if (isInput) return
+
+      if (e.clipboardData) {
+        handlePaste({ clipboardData: e.clipboardData })
+      }
+    }
+
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
+  }, [open])
 
   const removeImage = (index: number) => {
     const imageToRemove = afterPhotos[index]
@@ -181,50 +275,64 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
                   <span className="text-xs text-muted-foreground">{afterPhotos.length}/5</span>
                 </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => handleFileSelect(e.target.files)}
-                />
+                <div
+                  onPaste={handlePaste}
+                  onMouseEnter={() => setIsHovered(true)}
+                  onMouseLeave={() => setIsHovered(false)}
+                  tabIndex={0}
+                  className={`border-2 border-dashed rounded-lg p-4 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                    isHovered
+                      ? 'border-emerald-500 bg-emerald-500/5 ring-2 ring-emerald-500/30'
+                      : 'border-muted-foreground/25 hover:border-emerald-500/50'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e.target.files)}
+                  />
 
-                {afterPhotos.length === 0 ? (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 text-center"
-                  >
-                    <HugeiconsIcon icon={Image02Icon} className="w-10 h-10 text-muted-foreground mb-2" />
-                    <p className="text-sm font-medium">Click to select after photos</p>
-                    <p className="text-xs text-muted-foreground mt-1">Upload photos verifying building permit resolution</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                    {afterPhotos.map((photo, idx) => (
-                      <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
-                        <img src={photo.url} alt={`After ${idx}`} className="w-full h-full object-cover" />
+                  {afterPhotos.length === 0 ? (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center py-6 cursor-pointer text-center"
+                    >
+                      <HugeiconsIcon icon={Image02Icon} className={`w-10 h-10 mb-2 transition-colors ${isHovered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+                      <p className="text-sm font-medium">Click or hover & paste (Ctrl+V)</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {isHovered ? '📋 Ready! Press Ctrl+V to paste after photos' : 'Copy compliance photo from web and press Ctrl+V while hovering'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                      {afterPhotos.map((photo, idx) => (
+                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
+                          <img src={photo.url} alt={`After ${idx}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx)}
+                            className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <HugeiconsIcon icon={Delete02Icon} className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {afterPhotos.length < 5 && (
                         <button
                           type="button"
-                          onClick={() => removeImage(idx)}
-                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg aspect-square hover:bg-muted/50"
                         >
-                          <HugeiconsIcon icon={Delete02Icon} className="w-3.5 h-3.5" />
+                          <HugeiconsIcon icon={Add01Icon} className="w-6 h-6 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground mt-1">Add</span>
                         </button>
-                      </div>
-                    ))}
-                    {afterPhotos.length < 5 && (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg aspect-square hover:bg-muted/50"
-                      >
-                        <HugeiconsIcon icon={Add01Icon} className="w-6 h-6 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground mt-1">Add</span>
-                      </button>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {isSubmitting && (

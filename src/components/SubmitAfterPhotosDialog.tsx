@@ -74,24 +74,99 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
     }
   }
 
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items
-    if (!items) return
+  const [isHovered, setIsHovered] = useState(false)
+
+  const handlePaste = async (e: React.ClipboardEvent | { clipboardData: DataTransfer }) => {
+    const clipboardData = e.clipboardData
+    if (!clipboardData) return
     
     const files: File[] = []
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const file = items[i].getAsFile()
-        if (file) files.push(file)
+
+    // 1. Direct image files in clipboard
+    if (clipboardData.items) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i]
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) files.push(file)
+        }
       }
     }
-    
+
+    // 2. Extract image URL or HTML <img> tag if copied from web
+    if (files.length === 0) {
+      const htmlText = clipboardData.getData('text/html')
+      const plainText = clipboardData.getData('text/plain')
+      let imageUrl: string | null = null
+
+      if (htmlText) {
+        const match = htmlText.match(/<img[^>]+src=["']([^"']+)["']/i)
+        if (match && match[1]) {
+          imageUrl = match[1]
+        }
+      }
+
+      if (!imageUrl && plainText) {
+        const trimmed = plainText.trim()
+        if (trimmed.startsWith('data:image/') || /^https?:\/\/.+/i.test(trimmed)) {
+          imageUrl = trimmed
+        }
+      }
+
+      if (imageUrl) {
+        try {
+          toast.info('Fetching image from pasted URL...')
+          let blob: Blob | null = null
+
+          if (imageUrl.startsWith('data:image/')) {
+            const res = await fetch(imageUrl)
+            blob = await res.blob()
+          } else {
+            const res = await fetch(imageUrl).catch(() => null)
+            if (res && res.ok) {
+              blob = await res.blob()
+            }
+          }
+
+          if (blob && blob.type.startsWith('image/')) {
+            const ext = blob.type.split('/')[1] || 'jpg'
+            const file = new File([blob], `pasted-image-${Date.now()}.${ext}`, { type: blob.type })
+            files.push(file)
+          } else {
+            toast.error('Could not load image directly. Try right-clicking image -> "Copy Image".')
+          }
+        } catch (err) {
+          console.error('Failed to fetch pasted image:', err)
+          toast.error('Failed to load image from URL')
+        }
+      }
+    }
+
     if (files.length > 0) {
       const dt = new DataTransfer()
       files.forEach(file => dt.items.add(file))
-      handleFileSelect(dt.files)
+      await handleFileSelect(dt.files)
+      toast.success(`Pasted ${files.length} after photo(s)!`)
     }
   }
+
+  // Global paste handler when dialog is open
+  useEffect(() => {
+    if (!open) return
+
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeElement = document.activeElement
+      const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
+      if (isInput) return
+
+      if (e.clipboardData) {
+        handlePaste({ clipboardData: e.clipboardData })
+      }
+    }
+
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
+  }, [open])
 
   const removeImage = (index: number) => {
     const imageToRemove = afterPhotos[index]
@@ -227,8 +302,21 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
           <ScrollArea className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
               <div className="space-y-6">
-                <div className="space-y-2" onPaste={handlePaste}>
-                  <Label>After Photos (Optional - Max 5, Ctrl+V to paste)</Label>
+                <div
+                  onPaste={handlePaste}
+                  onMouseEnter={() => setIsHovered(true)}
+                  onMouseLeave={() => setIsHovered(false)}
+                  tabIndex={0}
+                  className={`space-y-2 p-3 rounded-lg border-2 border-dashed transition-all focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
+                    isHovered
+                      ? 'border-green-500 bg-green-500/5 ring-2 ring-green-500/30'
+                      : 'border-muted-foreground/20 hover:border-green-500/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <Label>After Photos (Optional - Max 5)</Label>
+                    <span className="text-xs text-muted-foreground">{afterPhotos.length}/5</span>
+                  </div>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {afterPhotos.map((image, index) => (
                       <Card key={index} className="relative p-2 border-green-200">
@@ -252,8 +340,8 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
                         onClick={() => fileInputRef.current?.click()}
                       >
                         <div className="text-center">
-                          <HugeiconsIcon icon={Image02Icon} className="w-8 h-8 mx-auto text-green-600" />
-                          <p className="text-xs text-green-600 mt-1">Add Photo</p>
+                          <HugeiconsIcon icon={Image02Icon} className={`w-8 h-8 mx-auto transition-colors ${isHovered ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                          <p className="text-xs font-medium text-green-600 mt-1">Add / Paste</p>
                         </div>
                       </Card>
                     )}
@@ -268,7 +356,7 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
                     disabled={isSubmitting}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Click to upload or paste images (Ctrl+V)
+                    {isHovered ? '📋 Ready! Press Ctrl+V to paste after photos' : 'Click to upload or hover & press Ctrl+V to paste copied images'}
                   </p>
                 </div>
 

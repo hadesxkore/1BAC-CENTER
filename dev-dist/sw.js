@@ -85,7 +85,7 @@ define(['./workbox-7b16fee0'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "index.html",
-    "revision": "0.apn0lvu98f"
+    "revision": "0.07c1tok95ao"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
@@ -97,7 +97,7 @@ define(['./workbox-7b16fee0'], (function (workbox) { 'use strict';
       maxEntries: 100,
       maxAgeSeconds: 2592000
     }), new workbox.CacheableResponsePlugin({
-      statuses: [0, 200]
+      statuses: [200]
     })]
   }), 'GET');
   workbox.registerRoute(/^https:\/\/res\.cloudinary\.com\/.*/i, new workbox.CacheFirst({
@@ -106,7 +106,7 @@ define(['./workbox-7b16fee0'], (function (workbox) { 'use strict';
       maxEntries: 100,
       maxAgeSeconds: 2592000
     }), new workbox.CacheableResponsePlugin({
-      statuses: [0, 200]
+      statuses: [200]
     })]
   }), 'GET');
 

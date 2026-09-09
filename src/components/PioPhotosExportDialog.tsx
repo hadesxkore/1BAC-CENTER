@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Switch } from '@/components/ui/switch'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Download01Icon,
@@ -22,6 +23,7 @@ import {
   Calendar01Icon,
   Cancel01Icon,
   RefreshIcon,
+  File02Icon,
 } from '@hugeicons/core-free-icons'
 import type { Action, ConcernImage } from '@/data/sampleActions'
 import { format } from 'date-fns'
@@ -56,9 +58,136 @@ export function PioPhotosExportDialog({
 }: PioPhotosExportDialogProps) {
   const [folderName, setFolderName] = useState('')
   const [organizationMode, setOrganizationMode] = useState<'by-concern' | 'by-type' | 'flat'>('by-concern')
+  const [includeDetailsTxt, setIncludeDetailsTxt] = useState(true)
   const [isDownloading, setIsDownloading] = useState(false)
   const [progressText, setProgressText] = useState('')
   const [excludedPhotoIds, setExcludedPhotoIds] = useState<Set<string>>(new Set())
+
+  // Generate plain text report details for a single concern
+  const generateConcernDetailsTxt = (
+    concern: Action,
+    concernBeforeCount: number,
+    concernAfterCount: number
+  ): string => {
+    const deptActions = concern.actionHistory?.filter((a) => a.actionType === 'department') || []
+    const legacyAction = !deptActions.length && concern.actionTaken ? concern.actionTaken : null
+    const deptRecord = deptActions[deptActions.length - 1] || legacyAction
+    const pgoActions = concern.actionHistory?.filter((a) => a.actionType === 'pgo') || []
+    const pgoRecord = pgoActions[pgoActions.length - 1]
+
+    let dateReportedStr = 'N/A'
+    if (concern.dateReported) {
+      try {
+        dateReportedStr = format(new Date(concern.dateReported), 'MMMM dd, yyyy')
+      } catch {
+        dateReportedStr = concern.dateReported
+      }
+    }
+
+    let actionDateStr = 'N/A'
+    if (concern.actionDate) {
+      try {
+        actionDateStr = format(new Date(concern.actionDate), 'MMMM dd, yyyy')
+      } catch {
+        actionDateStr = concern.actionDate
+      }
+    }
+
+    let text = `================================================================
+REPORT DETAILS & INFORMATION (PIO EXPORT)
+================================================================
+Tracking No / ID : ${concern.trackingNo || concern.id}
+Report Title     : ${concern.reportTitle || 'N/A'}
+Category         : ${(concern.category || 'N/A').toUpperCase()}
+Municipality     : ${concern.municipality || 'N/A'}
+Location / Addr  : ${concern.location || 'N/A'}
+Coordinates      : ${concern.coordinates || 'N/A'}
+Date Reported    : ${dateReportedStr}
+Reported By      : ${concern.reportedBy || 'N/A'}
+Assigned To      : ${concern.assignedTo || 'N/A'}
+Current Status   : ${(concern.status || 'N/A').toUpperCase()}
+
+----------------------------------------------------------------
+PROBLEM / CONCERN DESCRIPTION (CASE REMARKS)
+----------------------------------------------------------------
+${concern.caseRemarks || concern.remarks || 'No detailed description provided.'}
+
+----------------------------------------------------------------
+ACTION TAKEN DETAILS
+----------------------------------------------------------------
+Date Action Taken : ${actionDateStr}
+Answered By       : ${concern.answeredBy || 'N/A'}
+
+[DEPARTMENT ACTION]
+Submitted By      : ${deptRecord?.submittedBy || 'N/A'}
+Action Notes      : ${deptRecord?.notes || 'No department notes recorded.'}
+`
+
+    if (pgoRecord) {
+      text += `
+[PROVINCIAL GOVERNOR'S OFFICE (PGO) ACTION]
+Submitted By      : ${pgoRecord.submittedBy || 'N/A'}
+Action Notes      : ${pgoRecord.notes || 'No PGO notes recorded.'}
+`
+    }
+
+    text += `
+----------------------------------------------------------------
+EXPORTED MEDIA SUMMARY IN THIS FOLDER
+----------------------------------------------------------------
+- BEFORE Photos Included : ${concernBeforeCount} photo(s)
+- AFTER Photos Included  : ${concernAfterCount} photo(s)
+================================================================
+Exported on: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}
+`
+
+    return text
+  }
+
+  // Generate master batch summary text file for all selected concerns
+  const generateMasterSummaryTxt = (
+    concernsList: Action[],
+    photosList: PhotoItem[]
+  ): string => {
+    const dateStr = format(new Date(), 'MMMM dd, yyyy HH:mm:ss')
+    let summary = `================================================================
+PIO MEDIA EXPORT - BATCH SUMMARY REPORT
+================================================================
+Exported On         : ${dateStr}
+Total Concerns      : ${concernsList.length}
+Total Photos In Zip : ${photosList.length} (BEFORE: ${photosList.filter((p) => p.type === 'BEFORE').length}, AFTER: ${photosList.filter((p) => p.type === 'AFTER').length})
+================================================================
+
+LIST OF INCLUDED REPORTS & DESCRIPTIONS:
+`
+
+    concernsList.forEach((concern, idx) => {
+      const cBeforeCount = photosList.filter((p) => p.concernId === concern.id && p.type === 'BEFORE').length
+      const cAfterCount = photosList.filter((p) => p.concernId === concern.id && p.type === 'AFTER').length
+
+      summary += `\n----------------------------------------------------------------
+${idx + 1}. [${concern.trackingNo || concern.id}] ${concern.reportTitle}
+----------------------------------------------------------------
+Municipality    : ${concern.municipality}
+Category        : ${(concern.category || '').toUpperCase()}
+Location        : ${concern.location}
+Date Reported   : ${concern.dateReported}
+Reported By     : ${concern.reportedBy}
+Assigned To     : ${concern.assignedTo}
+Status          : ${(concern.status || '').toUpperCase()}
+Media Included  : ${cBeforeCount} BEFORE photo(s), ${cAfterCount} AFTER photo(s)
+
+DESCRIPTION / CASE REMARKS:
+${concern.caseRemarks || concern.remarks || 'No detailed description provided.'}
+
+ACTION TAKEN:
+${concern.actionTaken?.notes || 'Action taken details recorded.'}
+`
+    })
+
+    summary += `\n================================================================\nEnd of Batch Summary\n`
+    return summary
+  }
 
   // Reset excluded photos whenever dialog opens with new concerns
   useEffect(() => {
@@ -372,7 +501,43 @@ export function PioPhotosExportDialog({
         throw new Error('Unable to download any photos from server. Please check your network connection.')
       }
 
-      setProgressText(`Packaging ${completed} photos into ZIP archive...`)
+      // Generate report description (.txt) files if enabled
+      if (includeDetailsTxt) {
+        setProgressText('Generating report description (.txt) files...')
+
+        // 1. Individual text file per concern
+        concerns.forEach((concern, cIdx) => {
+          const concernIdxStr = String(cIdx + 1).padStart(2, '0')
+          const cleanTitle = cleanFilename(concern.reportTitle || 'Concern')
+          const muni = cleanFilename(concern.municipality || 'Bataan')
+          const folderKey = `${concernIdxStr}_${muni}_${cleanTitle}`
+
+          const cBeforeCount = activePhotos.filter((p) => p.concernId === concern.id && p.type === 'BEFORE').length
+          const cAfterCount = activePhotos.filter((p) => p.concernId === concern.id && p.type === 'AFTER').length
+
+          const txtContent = generateConcernDetailsTxt(concern, cBeforeCount, cAfterCount)
+
+          if (organizationMode === 'by-concern') {
+            let subfolder = concernFoldersMap.get(folderKey)
+            if (!subfolder) {
+              subfolder = mainFolder.folder(folderKey) || mainFolder
+              concernFoldersMap.set(folderKey, subfolder)
+            }
+            subfolder.file('REPORT_DETAILS.txt', txtContent)
+          } else if (organizationMode === 'by-type') {
+            const detailsFolder = mainFolder.folder('REPORT_DETAILS') || mainFolder
+            detailsFolder.file(`REPORT_DETAILS_${concernIdxStr}_${muni}_${cleanTitle}.txt`, txtContent)
+          } else {
+            mainFolder.file(`REPORT_DETAILS_${concernIdxStr}_${muni}_${cleanTitle}.txt`, txtContent)
+          }
+        })
+
+        // 2. Master summary text file at root level
+        const masterSummaryTxt = generateMasterSummaryTxt(concerns, activePhotos)
+        mainFolder.file('00_ALL_REPORTS_SUMMARY.txt', masterSummaryTxt)
+      }
+
+      setProgressText(`Packaging photos ${includeDetailsTxt ? '& report details ' : ''}into ZIP archive...`)
       const zipBlob = await zip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',
@@ -506,6 +671,27 @@ export function PioPhotosExportDialog({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Include Text File Option Toggle */}
+          <div className="flex items-center justify-between p-4 rounded-xl border bg-muted/20">
+            <div className="space-y-0.5 pr-4">
+              <Label
+                htmlFor="include-txt-switch"
+                className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5 cursor-pointer"
+              >
+                <HugeiconsIcon icon={File02Icon} className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                Include Report Details (.txt File)
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Generates a readable .txt file alongside photos containing full report description, location, dates, and action notes for PIO awareness.
+              </p>
+            </div>
+            <Switch
+              id="include-txt-switch"
+              checked={includeDetailsTxt}
+              onCheckedChange={setIncludeDetailsTxt}
+            />
           </div>
 
           {/* Selected Photos Preview & Removal Area */}

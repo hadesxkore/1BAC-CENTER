@@ -246,8 +246,8 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
                     </SelectTrigger>
                     <SelectContent>
                       {BATAAN_MUNICIPALITIES.map((mun) => (
-                        <SelectItem key={mun.name} value={mun.name}>
-                          {mun.name}
+                        <SelectItem key={mun} value={mun}>
+                          {mun}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -933,8 +933,8 @@ export default function PNP() {
                     <SelectContent>
                       <SelectItem value="all">All Municipalities</SelectItem>
                       {BATAAN_MUNICIPALITIES.map((muni) => (
-                        <SelectItem key={muni.name} value={muni.name}>
-                          {muni.name}
+                        <SelectItem key={muni} value={muni}>
+                          {muni}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1157,8 +1157,8 @@ export default function PNP() {
                     <SelectContent>
                       <SelectItem value="all">All Municipalities</SelectItem>
                       {BATAAN_MUNICIPALITIES.map((muni) => (
-                        <SelectItem key={muni.name} value={muni.name}>
-                          {muni.name}
+                        <SelectItem key={muni} value={muni}>
+                          {muni}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -114,6 +114,80 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
     setIsCompressing(false)
   }
 
+  const handlePaste = async (e: React.ClipboardEvent | { clipboardData: DataTransfer }, type: 'before' | 'after') => {
+    const clipboardData = e.clipboardData
+    if (!clipboardData) return
+    
+    const files: File[] = []
+
+    // 1. Direct image files in clipboard
+    if (clipboardData.items) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i]
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) files.push(file)
+        }
+      }
+    }
+
+    // 2. Extract image URL or HTML <img> tag if copied from another website
+    if (files.length === 0) {
+      const htmlText = clipboardData.getData('text/html')
+      const plainText = clipboardData.getData('text/plain')
+      let imageUrl: string | null = null
+
+      if (htmlText) {
+        const match = htmlText.match(/<img[^>]+src=["']([^"']+)["']/i)
+        if (match && match[1]) {
+          imageUrl = match[1]
+        }
+      }
+
+      if (!imageUrl && plainText) {
+        const trimmed = plainText.trim()
+        if (trimmed.startsWith('data:image/') || /^https?:\/\/.+/i.test(trimmed)) {
+          imageUrl = trimmed
+        }
+      }
+
+      if (imageUrl) {
+        try {
+          toast.info('Fetching image from pasted URL...')
+          let blob: Blob | null = null
+
+          if (imageUrl.startsWith('data:image/')) {
+            const res = await fetch(imageUrl)
+            blob = await res.blob()
+          } else {
+            const res = await fetch(imageUrl).catch(() => null)
+            if (res && res.ok) {
+              blob = await res.blob()
+            }
+          }
+
+          if (blob && blob.type.startsWith('image/')) {
+            const ext = blob.type.split('/')[1] || 'jpg'
+            const file = new File([blob], `pasted-image-${Date.now()}.${ext}`, { type: blob.type })
+            files.push(file)
+          } else {
+            toast.error('Could not load image directly. Try right-clicking image -> "Copy Image".')
+          }
+        } catch (err) {
+          console.error('Failed to fetch pasted image:', err)
+          toast.error('Failed to load image from URL')
+        }
+      }
+    }
+    
+    if (files.length > 0) {
+      const dt = new DataTransfer()
+      files.forEach(file => dt.items.add(file))
+      handleFileSelect(dt.files, type)
+      toast.success(`Pasted image to ${type} photos!`)
+    }
+  }
+
   const removeImage = (index: number, type: 'before' | 'after') => {
     const photos = type === 'before' ? beforePhotos : afterPhotos
     const setPhotos = type === 'before' ? setBeforePhotos : setAfterPhotos
@@ -124,6 +198,25 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
     }
     setPhotos(photos.filter((_, i) => i !== index))
   }
+
+  // Global paste handler when modal is open
+  useEffect(() => {
+    if (!open) return
+
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeElement = document.activeElement
+      const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
+      if (isInput) return
+
+      if (e.clipboardData) {
+        const targetType = beforePhotos.length < 5 ? 'before' : 'after'
+        handlePaste({ clipboardData: e.clipboardData }, targetType)
+      }
+    }
+
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
+  }, [open, beforePhotos.length, afterPhotos.length])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -289,38 +382,55 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">Before Photos</Label>
-                  <span className="text-xs text-muted-foreground">{beforePhotos.length}/5</span>
+                  <span className="text-xs text-muted-foreground">{beforePhotos.length}/5 images</span>
                 </div>
-                <input
-                  ref={beforeFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => handleFileSelect(e.target.files, 'before')}
-                />
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                  {beforePhotos.map((photo, idx) => (
-                    <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
-                      <img src={photo.url} alt={`Before ${idx}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx, 'before')}
-                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  {beforePhotos.length < 5 && (
-                    <button
-                      type="button"
+                <div
+                  onPaste={(e) => handlePaste(e, 'before')}
+                  tabIndex={0}
+                  className="border-2 border-dashed rounded-lg p-4 transition-colors border-muted-foreground/25 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <input
+                    ref={beforeFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e.target.files, 'before')}
+                  />
+                  {beforePhotos.length === 0 ? (
+                    <div
                       onClick={() => beforeFileInputRef.current?.click()}
-                      className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg aspect-square hover:bg-muted/50"
+                      className="flex flex-col items-center justify-center py-6 cursor-pointer text-center"
                     >
-                      <HugeiconsIcon icon={Add01Icon} className="w-6 h-6 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground mt-1">Add</span>
-                    </button>
+                      <HugeiconsIcon icon={Image02Icon} className="w-10 h-10 text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Click or paste images here (Ctrl+V)</p>
+                      <p className="text-xs text-muted-foreground mt-1">Copy an image or image URL from web and press Ctrl+V</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                      {beforePhotos.map((photo, idx) => (
+                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
+                          <img src={photo.url} alt={`Before ${idx}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx, 'before')}
+                            className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <HugeiconsIcon icon={Delete02Icon} className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {beforePhotos.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => beforeFileInputRef.current?.click()}
+                          className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg aspect-square hover:bg-muted/50"
+                        >
+                          <HugeiconsIcon icon={Add01Icon} className="w-6 h-6 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground mt-1">Add</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -329,38 +439,55 @@ export function EditBuildingPermitDialog({ report }: EditBuildingPermitDialogPro
               <div className="space-y-3 pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">After Photos</Label>
-                  <span className="text-xs text-muted-foreground">{afterPhotos.length}/5</span>
+                  <span className="text-xs text-muted-foreground">{afterPhotos.length}/5 images</span>
                 </div>
-                <input
-                  ref={afterFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => handleFileSelect(e.target.files, 'after')}
-                />
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                  {afterPhotos.map((photo, idx) => (
-                    <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
-                      <img src={photo.url} alt={`After ${idx}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx, 'after')}
-                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  {afterPhotos.length < 5 && (
-                    <button
-                      type="button"
+                <div
+                  onPaste={(e) => handlePaste(e, 'after')}
+                  tabIndex={0}
+                  className="border-2 border-dashed rounded-lg p-4 transition-colors border-muted-foreground/25 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <input
+                    ref={afterFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e.target.files, 'after')}
+                  />
+                  {afterPhotos.length === 0 ? (
+                    <div
                       onClick={() => afterFileInputRef.current?.click()}
-                      className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg aspect-square hover:bg-muted/50"
+                      className="flex flex-col items-center justify-center py-6 cursor-pointer text-center"
                     >
-                      <HugeiconsIcon icon={Add01Icon} className="w-6 h-6 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground mt-1">Add</span>
-                    </button>
+                      <HugeiconsIcon icon={Image02Icon} className="w-10 h-10 text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Click or paste images here (Ctrl+V)</p>
+                      <p className="text-xs text-muted-foreground mt-1">Copy compliance photo from web or clipboard and press Ctrl+V</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                      {afterPhotos.map((photo, idx) => (
+                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
+                          <img src={photo.url} alt={`After ${idx}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx, 'after')}
+                            className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <HugeiconsIcon icon={Delete02Icon} className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {afterPhotos.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => afterFileInputRef.current?.click()}
+                          className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg aspect-square hover:bg-muted/50"
+                        >
+                          <HugeiconsIcon icon={Add01Icon} className="w-6 h-6 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground mt-1">Add</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 

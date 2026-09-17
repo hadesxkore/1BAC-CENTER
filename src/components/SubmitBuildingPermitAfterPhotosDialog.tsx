@@ -47,7 +47,7 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
     setIsCompressing(true)
     const newImages: PhotoImage[] = []
     
-    for (let i = 0; i < Math.min(files.length, 5 - afterPhotos.length); i++) {
+    for (let i = 0; i < Math.min(files.length, 4 - afterPhotos.length); i++) {
       const file = files[i]
       if (file.type.startsWith('image/')) {
         const fileSizeInMB = file.size / 1024 / 1024
@@ -186,7 +186,7 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
     try {
       const filesToUpload = afterPhotos.map(p => p.file!).filter(Boolean)
 
-      const uploadResults = await uploadMultipleToCloudinary(filesToUpload, (completed, total) => {
+      const uploadResults = await uploadMultipleToCloudinary(filesToUpload, (completed, total, _stage) => {
         setUploadProgress((completed / total) * 100)
       })
 
@@ -272,7 +272,7 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
                   <Label className="text-base font-semibold">
                     After Photos <span className="text-red-500">*</span>
                   </Label>
-                  <span className="text-xs text-muted-foreground">{afterPhotos.length}/5</span>
+                  <span className="text-xs text-muted-foreground">{afterPhotos.length}/4</span>
                 </div>
 
                 <div
@@ -292,7 +292,11 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
                     accept="image/*"
                     multiple
                     className="hidden"
-                    onChange={(e) => handleFileSelect(e.target.files)}
+                    onChange={(e) => {
+                      handleFileSelect(e.target.files)
+                      // Reset so the same files can be re-selected and onChange fires every time
+                      if (fileInputRef.current) fileInputRef.current.value = ''
+                    }}
                   />
 
                   {afterPhotos.length === 0 ? (
@@ -320,7 +324,7 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
                           </button>
                         </div>
                       ))}
-                      {afterPhotos.length < 5 && (
+                      {afterPhotos.length < 4 && (
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}

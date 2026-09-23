@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ViewIcon } from '@hugeicons/core-free-icons'
 import { format } from 'date-fns'
+import { ImageLightboxModal, useLightbox } from '@/components/ImageLightboxModal'
 
 interface BuildingPermitReport {
   id: string
@@ -65,7 +66,20 @@ function formatDate(dateString: string | undefined | null, formatStr: string): s
 }
 
 export function ViewBuildingPermitDialog({ report }: ViewBuildingPermitDialogProps) {
+  const { lightbox, open: openLightbox, close: closeLightbox, navigate } = useLightbox()
+
+  const allBeforePhotos = report.beforePhotos.map((p, i) => ({ url: p.url, alt: `Before ${i + 1}` }))
+  const allAfterPhotos = (report.afterPhotos?.photos ?? []).map((p, i) => ({ url: p.url, alt: `After ${i + 1}` }))
+
   return (
+    <>
+      <ImageLightboxModal
+        images={lightbox.images}
+        isOpen={lightbox.isOpen}
+        currentIndex={lightbox.index}
+        onClose={closeLightbox}
+        onNavigate={navigate}
+      />
     <Dialog>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="w-full justify-start">
@@ -130,12 +144,20 @@ export function ViewBuildingPermitDialog({ report }: ViewBuildingPermitDialogPro
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {report.beforePhotos.map((photo, index) => (
-                    <div key={index} className="aspect-square rounded-lg overflow-hidden border bg-muted group relative">
+                    <div
+                      key={index}
+                      className="aspect-square rounded-lg overflow-hidden border bg-muted group relative cursor-zoom-in"
+                      onClick={() => openLightbox(allBeforePhotos, index)}
+                      title="Click to enlarge"
+                    >
                       <LazyImage
                         src={photo.url}
                         alt={`Before ${index + 1}`}
                         className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center">
+                        <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium bg-black/50 px-2 py-1 rounded transition-opacity duration-200">🔍 View</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -159,12 +181,20 @@ export function ViewBuildingPermitDialog({ report }: ViewBuildingPermitDialogPro
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       {report.afterPhotos.photos.map((photo, index) => (
-                        <div key={index} className="aspect-square rounded-lg overflow-hidden border bg-muted group relative">
+                        <div
+                          key={index}
+                          className="aspect-square rounded-lg overflow-hidden border bg-muted group relative cursor-zoom-in"
+                          onClick={() => openLightbox(allAfterPhotos, index)}
+                          title="Click to enlarge"
+                        >
                           <LazyImage
                             src={photo.url}
                             alt={`After ${index + 1}`}
                             className="w-full h-full object-cover transition-transform group-hover:scale-105"
                           />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center">
+                            <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium bg-black/50 px-2 py-1 rounded transition-opacity duration-200">🔍 View</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -191,5 +221,6 @@ export function ViewBuildingPermitDialog({ report }: ViewBuildingPermitDialogPro
         </ScrollArea>
       </DialogContent>
     </Dialog>
+    </>  
   )
 }

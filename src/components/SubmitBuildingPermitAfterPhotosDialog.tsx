@@ -38,32 +38,46 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
   const { user } = useAppStore()
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Use a ref to always have the latest photo count — avoids stale closure in handleFileSelect
+  const afterPhotosRef = useRef<PhotoImage[]>([])
 
   const [isHovered, setIsHovered] = useState(false)
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files) return
-    
+
+    const currentPhotos = afterPhotosRef.current
+    const remainingSlots = 4 - currentPhotos.length
+    if (remainingSlots <= 0) {
+      toast.info('Maximum of 4 photos already reached')
+      return
+    }
+
     setIsCompressing(true)
     const newImages: PhotoImage[] = []
-    
-    for (let i = 0; i < Math.min(files.length, 4 - afterPhotos.length); i++) {
+
+    for (let i = 0; i < Math.min(files.length, remainingSlots); i++) {
       const file = files[i]
       if (file.type.startsWith('image/')) {
         const fileSizeInMB = file.size / 1024 / 1024
         let processedFile = file
-        
+
         if (fileSizeInMB > 1.5) {
           toast.info(`Compressing ${file.name}...`)
           processedFile = await compressImage(file)
         }
-        
+
         const url = URL.createObjectURL(processedFile)
         newImages.push({ url, publicId: '', file: processedFile })
       }
     }
-    
-    setAfterPhotos([...afterPhotos, ...newImages])
+
+    // Functional update — always based on latest state, never stale
+    setAfterPhotos(prev => {
+      const updated = [...prev, ...newImages]
+      afterPhotosRef.current = updated
+      return updated
+    })
     setIsCompressing(false)
   }
 
@@ -160,11 +174,15 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
   }, [open])
 
   const removeImage = (index: number) => {
-    const imageToRemove = afterPhotos[index]
-    if (imageToRemove.url.startsWith('blob:')) {
-      URL.revokeObjectURL(imageToRemove.url)
-    }
-    setAfterPhotos(afterPhotos.filter((_, i) => i !== index))
+    setAfterPhotos(prev => {
+      const imageToRemove = prev[index]
+      if (imageToRemove?.url.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToRemove.url)
+      }
+      const updated = prev.filter((_, i) => i !== index)
+      afterPhotosRef.current = updated
+      return updated
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -229,6 +247,7 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
     setNotes('')
     setActionDate(undefined)
     setAfterPhotos([])
+    afterPhotosRef.current = []
   }
 
   return (

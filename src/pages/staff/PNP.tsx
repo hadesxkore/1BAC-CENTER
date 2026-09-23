@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import type {
   ColumnDef,
@@ -73,6 +73,7 @@ import { EditBuildingPermitDialog } from '@/components/EditBuildingPermitDialog'
 import { DeleteBuildingPermitDialog } from '@/components/DeleteBuildingPermitDialog'
 import { SubmitBuildingPermitAfterPhotosDialog } from '@/components/SubmitBuildingPermitAfterPhotosDialog'
 import { generateBuildingPermitSummaryPDF } from '@/utils/generateBuildingPermitSummaryPDF'
+import { ImageLightboxModal } from '@/components/ImageLightboxModal'
 
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
@@ -149,6 +150,63 @@ const LazyImage = memo(({ src, alt, className }: { src: string; alt: string; cla
 })
 
 LazyImage.displayName = 'LazyImage'
+
+// Self-contained photo strip with built-in lightbox
+const PhotoCell = memo(({ photos, label }: { photos: { url: string; publicId: string }[]; label: string }) => {
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState(0)
+
+  const images = photos.map((p, i) => ({ url: p.url, alt: `${label} ${i + 1}` }))
+
+  const openAt = useCallback((i: number) => {
+    setLightboxIndex(i)
+    setLightboxOpen(true)
+  }, [])
+
+  if (!photos || photos.length === 0) return <span className="text-xs text-muted-foreground">-</span>
+
+  return (
+    <>
+      <ImageLightboxModal
+        images={images}
+        isOpen={lightboxOpen}
+        currentIndex={lightboxIndex}
+        onClose={() => setLightboxOpen(false)}
+        onNavigate={setLightboxIndex}
+      />
+      <div className="flex gap-1">
+        {photos.slice(0, 3).map((photo, index) => (
+          <button
+            key={index}
+            type="button"
+            className="relative w-10 h-10 rounded border overflow-hidden group cursor-zoom-in flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-primary"
+            onClick={() => openAt(index)}
+            title="Click to enlarge"
+          >
+            <LazyImage
+              src={photo.url}
+              alt={`${label} ${index + 1}`}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-150" />
+          </button>
+        ))}
+        {photos.length > 3 && (
+          <button
+            type="button"
+            className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs hover:bg-muted/80 transition-colors cursor-zoom-in"
+            onClick={() => openAt(3)}
+            title="View all photos"
+          >
+            +{photos.length - 3}
+          </button>
+        )}
+      </div>
+    </>
+  )
+})
+
+PhotoCell.displayName = 'PhotoCell'
 
 export default function PNP() {
   const [activeTab, setActiveTab] = useState<'pnp' | 'building-permit'>('pnp')
@@ -336,24 +394,7 @@ export default function PNP() {
       header: 'Before Photos',
       cell: ({ row }) => {
         const photos = row.original.beforePhotos
-        if (!photos || photos.length === 0) return <span className="text-xs text-muted-foreground">-</span>
-        return (
-          <div className="flex gap-1">
-            {photos.slice(0, 3).map((photo, index) => (
-              <LazyImage
-                key={index}
-                src={photo.url}
-                alt={`Before ${index + 1}`}
-                className="w-10 h-10 object-cover rounded border"
-              />
-            ))}
-            {photos.length > 3 && (
-              <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                +{photos.length - 3}
-              </div>
-            )}
-          </div>
-        )
+        return <PhotoCell photos={photos ?? []} label="Before" />
       },
     },
     {
@@ -366,21 +407,7 @@ export default function PNP() {
         if (status === 'for-validation' && afterPhotos && afterPhotos.photos && afterPhotos.photos.length > 0) {
           return (
             <div className="flex flex-col gap-1">
-              <div className="flex gap-1">
-                {afterPhotos.photos.slice(0, 3).map((photo, index) => (
-                  <LazyImage
-                    key={index}
-                    src={photo.url}
-                    alt={`After ${index + 1}`}
-                    className="w-10 h-10 object-cover rounded border"
-                  />
-                ))}
-                {afterPhotos.photos.length > 3 && (
-                  <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                    +{afterPhotos.photos.length - 3}
-                  </div>
-                )}
-              </div>
+              <PhotoCell photos={afterPhotos.photos} label="After" />
               <SubmitAfterPhotosDialog
                 reportId={row.original.id}
                 reportTitle={row.original.reportTitle}
@@ -400,23 +427,7 @@ export default function PNP() {
           )
         }
 
-        return (
-          <div className="flex gap-1">
-            {afterPhotos.photos.slice(0, 3).map((photo, index) => (
-              <LazyImage
-                key={index}
-                src={photo.url}
-                alt={`After ${index + 1}`}
-                className="w-10 h-10 object-cover rounded border"
-              />
-            ))}
-            {afterPhotos.photos.length > 3 && (
-              <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                +{afterPhotos.photos.length - 3}
-              </div>
-            )}
-          </div>
-        )
+        return <PhotoCell photos={afterPhotos.photos} label="After" />
       },
     },
     {
@@ -524,24 +535,7 @@ export default function PNP() {
       header: 'Before Photos',
       cell: ({ row }) => {
         const photos = row.original.beforePhotos
-        if (!photos || photos.length === 0) return <span className="text-xs text-muted-foreground">-</span>
-        return (
-          <div className="flex gap-1">
-            {photos.slice(0, 3).map((photo, index) => (
-              <LazyImage
-                key={index}
-                src={photo.url}
-                alt={`Before ${index + 1}`}
-                className="w-10 h-10 object-cover rounded border"
-              />
-            ))}
-            {photos.length > 3 && (
-              <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                +{photos.length - 3}
-              </div>
-            )}
-          </div>
-        )
+        return <PhotoCell photos={photos ?? []} label="Before" />
       },
     },
     {
@@ -554,21 +548,7 @@ export default function PNP() {
         if (status === 'for-validation' && afterPhotos && afterPhotos.photos && afterPhotos.photos.length > 0) {
           return (
             <div className="flex flex-col gap-1">
-              <div className="flex gap-1">
-                {afterPhotos.photos.slice(0, 3).map((photo, index) => (
-                  <LazyImage
-                    key={index}
-                    src={photo.url}
-                    alt={`After ${index + 1}`}
-                    className="w-10 h-10 object-cover rounded border"
-                  />
-                ))}
-                {afterPhotos.photos.length > 3 && (
-                  <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                    +{afterPhotos.photos.length - 3}
-                  </div>
-                )}
-              </div>
+              <PhotoCell photos={afterPhotos.photos} label="After" />
               <SubmitBuildingPermitAfterPhotosDialog
                 reportId={row.original.id}
                 reportTitle={row.original.reportTitle}
@@ -588,23 +568,7 @@ export default function PNP() {
           )
         }
 
-        return (
-          <div className="flex gap-1">
-            {afterPhotos.photos.slice(0, 3).map((photo, index) => (
-              <LazyImage
-                key={index}
-                src={photo.url}
-                alt={`After ${index + 1}`}
-                className="w-10 h-10 object-cover rounded border"
-              />
-            ))}
-            {afterPhotos.photos.length > 3 && (
-              <div className="w-10 h-10 bg-muted rounded border flex items-center justify-center text-xs">
-                +{afterPhotos.photos.length - 3}
-              </div>
-            )}
-          </div>
-        )
+        return <PhotoCell photos={afterPhotos.photos} label="After" />
       },
     },
     {

@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ViewIcon } from '@hugeicons/core-free-icons'
 import { format } from 'date-fns'
+import { ImageLightboxModal, useLightbox } from '@/components/ImageLightboxModal'
 
 interface PNPReport {
   id: string
@@ -86,7 +87,20 @@ function formatDate(dateString: string | undefined | null, formatStr: string): s
 }
 
 export function ViewPNPReportDialog({ report }: ViewPNPReportDialogProps) {
+  const { lightbox, open: openLightbox, close: closeLightbox, navigate } = useLightbox()
+
+  const allBeforePhotos = report.beforePhotos.map((p, i) => ({ url: p.url, alt: `Before ${i + 1}` }))
+  const allAfterPhotos = (report.afterPhotos?.photos ?? []).map((p, i) => ({ url: p.url, alt: `After ${i + 1}` }))
+
   return (
+    <>
+      <ImageLightboxModal
+        images={lightbox.images}
+        isOpen={lightbox.isOpen}
+        currentIndex={lightbox.index}
+        onClose={closeLightbox}
+        onNavigate={navigate}
+      />
     <Dialog>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="w-full justify-start">
@@ -166,19 +180,21 @@ export function ViewPNPReportDialog({ report }: ViewPNPReportDialogProps) {
                     <h3 className="text-lg font-semibold mb-4 text-blue-700">Before Photos</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {report.beforePhotos.map((photo, index) => (
-                        <a
+                        <div
                           key={index}
-                          href={photo.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block group"
+                          className="group relative cursor-zoom-in"
+                          onClick={() => openLightbox(allBeforePhotos, index)}
+                          title="Click to enlarge"
                         >
                           <LazyImage
                             src={photo.url}
                             alt={`Before ${index + 1}`}
                             className="w-full h-40 object-cover rounded-md border border-blue-200 group-hover:opacity-80 transition-opacity cursor-pointer"
                           />
-                        </a>
+                          <div className="absolute inset-0 rounded-md bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center">
+                            <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium bg-black/50 px-2 py-1 rounded transition-opacity duration-200">🔍 View</span>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -230,19 +246,21 @@ export function ViewPNPReportDialog({ report }: ViewPNPReportDialogProps) {
                         <div className="grid grid-cols-2 gap-3">
                           {report.afterPhotos.photos && report.afterPhotos.photos.length > 0 ? (
                             report.afterPhotos.photos.map((photo, index) => (
-                              <a
+                              <div
                                 key={index}
-                                href={photo.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block group"
+                                className="group relative cursor-zoom-in"
+                                onClick={() => openLightbox(allAfterPhotos, index)}
+                                title="Click to enlarge"
                               >
                                 <LazyImage
                                   src={photo.url}
                                   alt={`After ${index + 1}`}
                                   className="w-full h-40 object-cover rounded-md border border-green-200 group-hover:opacity-80 transition-opacity cursor-pointer"
                                 />
-                              </a>
+                                <div className="absolute inset-0 rounded-md bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center">
+                                  <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium bg-black/50 px-2 py-1 rounded transition-opacity duration-200">🔍 View</span>
+                                </div>
+                              </div>
                             ))
                           ) : (
                             <div className="col-span-2 text-center py-8 text-muted-foreground">
@@ -283,5 +301,6 @@ export function ViewPNPReportDialog({ report }: ViewPNPReportDialogProps) {
         </div>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

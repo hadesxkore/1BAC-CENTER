@@ -38,6 +38,8 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
   const [notes, setNotes] = useState('')
   const [actionDate, setActionDate] = useState<Date | undefined>(undefined)
   const [afterPhotos, setAfterPhotos] = useState<PhotoImage[]>([])
+  const afterPhotosRef = useRef<PhotoImage[]>([])
+  afterPhotosRef.current = afterPhotos
   const { user } = useAppStore()
   
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -45,10 +47,17 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
   const handleFileSelect = async (files: FileList | null) => {
     if (!files) return
     
+    const currentPhotos = afterPhotosRef.current
+    const remainingSlots = 5 - currentPhotos.length
+    if (remainingSlots <= 0) {
+      toast.warning('Maximum 5 images allowed')
+      return
+    }
+
     setIsCompressing(true)
     const newImages: PhotoImage[] = []
     
-    for (let i = 0; i < Math.min(files.length, 5 - afterPhotos.length); i++) {
+    for (let i = 0; i < Math.min(files.length, remainingSlots); i++) {
       const file = files[i]
       if (file.type.startsWith('image/')) {
         const fileSizeInMB = file.size / 1024 / 1024
@@ -66,10 +75,18 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
       }
     }
     
-    setAfterPhotos([...afterPhotos, ...newImages])
+    setAfterPhotos(prev => {
+      const updated = [...prev, ...newImages]
+      afterPhotosRef.current = updated
+      return updated
+    })
     setIsCompressing(false)
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
     
-    if (files.length + afterPhotos.length > 5) {
+    if (files.length + currentPhotos.length > 5) {
       toast.warning('Maximum 5 images allowed')
     }
   }

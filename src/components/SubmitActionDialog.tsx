@@ -43,6 +43,8 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const [actionStatus, setActionStatus] = useState<string>('resolved')
   const [skipActionDate, setSkipActionDate] = useState(false)
   const [images, setImages] = useState<ConcernImage[]>([])
+  const imagesRef = useRef<ConcernImage[]>([])
+  imagesRef.current = images
   const [isPgoAction, setIsPgoAction] = useState(forcePgoAction) // NEW: Initialize with forcePgoAction
   const { user } = useAppStore()
   
@@ -51,10 +53,17 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   const handleFileSelect = async (files: FileList | null) => {
     if (!files) return
     
+    const currentImages = imagesRef.current
+    const remainingSlots = 5 - currentImages.length
+    if (remainingSlots <= 0) {
+      toast.warning('Maximum 5 files allowed')
+      return
+    }
+
     setIsCompressing(true)
     const newImages: (ConcernImage & { file?: File })[] = []
     
-    for (let i = 0; i < Math.min(files.length, 5 - images.length); i++) {
+    for (let i = 0; i < Math.min(files.length, remainingSlots); i++) {
       const file = files[i]
       const fileSizeInMB = file.size / 1024 / 1024
       
@@ -119,11 +128,19 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       }
     }
     
-    setImages([...images, ...newImages] as ConcernImage[])
+    setImages(prev => {
+      const updated = [...prev, ...newImages] as ConcernImage[]
+      imagesRef.current = updated
+      return updated
+    })
     setIsCompressing(false)
     setCompressingFileName('')
     
-    if (files.length + images.length > 5) {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+
+    if (files.length + currentImages.length > 5) {
       toast.warning('Maximum 5 files allowed')
     }
   }
@@ -221,12 +238,15 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
   }, [open])
 
   const removeImage = (index: number) => {
-    const imageToRemove = images[index]
-    // Clean up object URL to prevent memory leak
-    if (imageToRemove.url.startsWith('blob:')) {
-      URL.revokeObjectURL(imageToRemove.url)
-    }
-    setImages(images.filter((_, i) => i !== index))
+    setImages(prev => {
+      const imageToRemove = prev[index]
+      if (imageToRemove && imageToRemove.url.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToRemove.url)
+      }
+      const updated = prev.filter((_, i) => i !== index)
+      imagesRef.current = updated
+      return updated
+    })
   }
 
   // Cleanup object URLs when component unmounts or dialog closes
@@ -403,6 +423,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       setActionDate(undefined)
       setSkipActionDate(false)
       setImages([])
+      imagesRef.current = []
       setIsPgoAction(false)
       setUploadProgress(0)
       setOpen(false)

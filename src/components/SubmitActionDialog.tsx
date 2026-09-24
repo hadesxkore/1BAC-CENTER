@@ -229,6 +229,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
       if (isInput) return
 
       if (e.clipboardData) {
+        e.preventDefault()
         handlePaste({ clipboardData: e.clipboardData })
       }
     }
@@ -574,7 +575,7 @@ export function SubmitActionDialog({ concernId, concernTitle, collectionName = '
                   </div>
                 </div>
 
-                <div className="space-y-2" onPaste={handlePaste}>
+                <div className="space-y-2">
                   <Label>Action Files (Optional - Max 5, Images/Documents, Ctrl+V to paste)</Label>
                   <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                     {images.map((image, index) => (

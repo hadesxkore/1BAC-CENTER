@@ -177,6 +177,7 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
       if (isInput) return
 
       if (e.clipboardData) {
+        e.preventDefault()
         handlePaste({ clipboardData: e.clipboardData })
       }
     }
@@ -320,7 +321,6 @@ export function SubmitAfterPhotosDialog({ reportId, reportTitle, currentStatus }
             <div className="px-6 py-6">
               <div className="space-y-6">
                 <div
-                  onPaste={handlePaste}
                   onMouseEnter={() => setIsHovered(true)}
                   onMouseLeave={() => setIsHovered(false)}
                   tabIndex={0}

@@ -165,6 +165,7 @@ export function SubmitBuildingPermitAfterPhotosDialog({ reportId, reportTitle }:
       if (isInput) return
 
       if (e.clipboardData) {
+        e.preventDefault()
         handlePaste({ clipboardData: e.clipboardData })
       }
     }

@@ -74,6 +74,7 @@ import { DeleteBuildingPermitDialog } from '@/components/DeleteBuildingPermitDia
 import { SubmitBuildingPermitAfterPhotosDialog } from '@/components/SubmitBuildingPermitAfterPhotosDialog'
 import { generateBuildingPermitSummaryPDF } from '@/utils/generateBuildingPermitSummaryPDF'
 import { ImageLightboxModal } from '@/components/ImageLightboxModal'
+import { GenerateMessengerSummaryDialog } from '@/components/GenerateMessengerSummaryDialog'
 
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
@@ -913,7 +914,15 @@ export default function PNP() {
                         Advanced Filters
                       </Button>
                     </CollapsibleTrigger>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <GenerateMessengerSummaryDialog
+                        concerns={filteredPNPData}
+                        buttonText="PNP GC Summary"
+                        dialogTitle="PNP Group Chat Summary Generator"
+                        dialogSubtitle="Generate formatted PNP status announcements ready to copy and forward directly to Messenger group chats."
+                        defaultIntroText="Magandang umaga po sa ating lahat! Paalala lang po regarding sa mga PNP reported cases na kailangan nating ma-monitor at ma-follow up:"
+                        showCategoryFilter={false}
+                      />
                       <Button variant="outline" size="sm" onClick={clearPNPFilters}>
                         Clear All
                       </Button>
@@ -1137,7 +1146,15 @@ export default function PNP() {
                         Advanced Filters
                       </Button>
                     </CollapsibleTrigger>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <GenerateMessengerSummaryDialog
+                        concerns={filteredBpData}
+                        buttonText="Building Permit GC Summary"
+                        dialogTitle="Building Permit Group Chat Summary Generator"
+                        dialogSubtitle="Generate formatted Building Permit status announcements ready to copy and forward directly to Messenger group chats."
+                        defaultIntroText="Magandang umaga po sa ating lahat! Paalala lang po regarding sa mga Building Permit cases na kailangan nating ma-monitor at ma-follow up:"
+                        showCategoryFilter={false}
+                      />
                       <Button variant="outline" size="sm" onClick={clearBpFilters}>
                         Clear All
                       </Button>

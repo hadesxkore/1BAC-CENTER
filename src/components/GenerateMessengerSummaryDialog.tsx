@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -23,18 +23,34 @@ import {
   FilterIcon,
   AlertCircleIcon,
 } from '@hugeicons/core-free-icons'
-import type { Action } from '@/data/sampleActions'
 import { format, parseISO, isValid } from 'date-fns'
 import { BATAAN_DISTRICTS } from '@/data/municipalities'
 import { toast } from '@/components/ui/sonner'
 
+export interface SummaryItem {
+  id: string
+  location: string
+  reportTitle: string
+  dateReported: string
+  municipality: string
+  status: string
+  category?: string
+}
+
 interface GenerateMessengerSummaryDialogProps {
-  concerns: Action[]
+  concerns: SummaryItem[]
   selectedRowIds?: Record<string, boolean>
+  buttonText?: string
+  dialogTitle?: string
+  dialogSubtitle?: string
+  defaultIntroText?: string
+  defaultDistrict?: string
+  showCategoryFilter?: boolean
 }
 
 // Helper to determine district from municipality name
 const getDistrict = (muni: string): 'District I' | 'District II' | 'District III' | 'Other' => {
+  if (!muni) return 'Other'
   const m = muni.trim().toLowerCase()
   if (BATAAN_DISTRICTS['Second District'].some((d) => d.toLowerCase() === m)) return 'District II'
   if (BATAAN_DISTRICTS['First District'].some((d) => d.toLowerCase() === m)) return 'District I'
@@ -64,28 +80,34 @@ const DISTRICT_HEADERS: Record<string, { title: string; subtitle: string }> = {
 export function GenerateMessengerSummaryDialog({
   concerns,
   selectedRowIds = {},
+  buttonText = 'GC Pending Summary',
+  dialogTitle = 'Messenger Group Chat Summary Generator',
+  dialogSubtitle = 'Generate formatted status announcements ready to copy and forward directly to Messenger group chats.',
+  defaultIntroText = 'Magandang umaga po sa ating lahat! Paalala lang po regarding sa mga reported cases na kailangan nating ma-monitor at ma-follow up:',
+  defaultDistrict = 'District II',
+  showCategoryFilter = true,
 }: GenerateMessengerSummaryDialogProps) {
   const [open, setOpen] = useState(false)
-  const [districtFilter, setDistrictFilter] = useState<string>('District II')
+  const [districtFilter, setDistrictFilter] = useState<string>(defaultDistrict)
   const [statusFilter, setStatusFilter] = useState<string>('pending')
-  const [categoryFilter, setCategoryFilter] = useState<string>('environmental')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [useSelectedOnly, setUseSelectedOnly] = useState<boolean>(false)
 
   // Message template customization
   const [greeting, setGreeting] = useState('Good morning po, @everyone! 🌞')
-  const [introText, setIntroText] = useState(
-    'Magandang umaga po sa ating lahat! Paalala lang po regarding sa mga Alleged illegal cutting reported trees na kailangan nating ma-monitor at ma-follow up:'
-  )
+  const [introText, setIntroText] = useState(defaultIntroText)
   const [closingText, setClosingText] = useState(
     'Kindly check and follow up po ang mga areas na ito and provide updates once completed.\n\nMaraming salamat po sa inyong cooperation and continuous support! 🙏\nMagandang araw po sa ating lahat! 🌿'
   )
 
-  // Track checked IDs for individual selection
-  const [includedIds, setIncludedIds] = useState<Set<string>>(new Set())
+  // Track excluded item IDs (rather than syncing included IDs via useEffect to prevent re-render loops)
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
   const [copied, setCopied] = useState(false)
   const [editedSummaryText, setEditedSummaryText] = useState<string | null>(null)
 
-  const selectedRowsCount = Object.keys(selectedRowIds).filter((k) => selectedRowIds[k]).length
+  const selectedRowsCount = useMemo(() => {
+    return Object.keys(selectedRowIds).filter((k) => selectedRowIds[k]).length
+  }, [selectedRowIds])
 
   // Filter eligible concerns based on drop-down criteria
   const eligibleConcerns = useMemo(() => {
@@ -104,30 +126,34 @@ export function GenerateMessengerSummaryDialog({
       // Status filter
       if (statusFilter === 'pending' && item.status !== 'pending') return false
       if (statusFilter === 'under-action' && item.status !== 'under-action' && item.status !== 'in-progress') return false
+      if (statusFilter === 'for-validation' && item.status !== 'for-validation') return false
       if (
         statusFilter === 'pending-or-action' &&
         item.status !== 'pending' &&
         item.status !== 'under-action' &&
-        item.status !== 'in-progress'
+        item.status !== 'in-progress' &&
+        item.status !== 'for-validation'
       ) return false
 
-      // Category filter
-      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false
+      // Category filter (if enabled)
+      if (showCategoryFilter && categoryFilter !== 'all' && item.category && item.category !== categoryFilter) {
+        return false
+      }
 
       return true
     })
-  }, [concerns, districtFilter, statusFilter, categoryFilter, useSelectedOnly, selectedRowIds, selectedRowsCount])
+  }, [concerns, districtFilter, statusFilter, categoryFilter, showCategoryFilter, useSelectedOnly, selectedRowIds, selectedRowsCount])
 
-  // Synchronize included IDs when eligible concerns change
-  useEffect(() => {
-    setIncludedIds(new Set(eligibleConcerns.map((c) => c.id)))
-    setEditedSummaryText(null)
-  }, [eligibleConcerns])
+  // Items included in the final text
+  const selectedItems = useMemo(() => {
+    return eligibleConcerns.filter((c) => !excludedIds.has(c.id))
+  }, [eligibleConcerns, excludedIds])
 
   // Auto-set useSelectedOnly if table rows were selected when opening dialog
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen)
     if (isOpen) {
+      setExcludedIds(new Set())
       if (selectedRowsCount > 0) {
         setUseSelectedOnly(true)
       } else {
@@ -154,8 +180,6 @@ export function GenerateMessengerSummaryDialog({
 
   // Generated message string
   const autoGeneratedText = useMemo(() => {
-    const selectedItems = eligibleConcerns.filter((c) => includedIds.has(c.id))
-
     const headerInfo = DISTRICT_HEADERS[districtFilter] || {
       title: districtFilter.toUpperCase(),
       subtitle: '',
@@ -181,28 +205,30 @@ export function GenerateMessengerSummaryDialog({
     text += `${closingText}`
 
     return text
-  }, [greeting, districtFilter, introText, closingText, eligibleConcerns, includedIds])
+  }, [greeting, districtFilter, introText, closingText, selectedItems])
 
   // Final display text (edited or auto)
   const finalSummaryText = editedSummaryText !== null ? editedSummaryText : autoGeneratedText
 
   const toggleSelectAll = () => {
-    if (includedIds.size === eligibleConcerns.length) {
-      setIncludedIds(new Set())
+    if (excludedIds.size === 0) {
+      // Exclude all
+      setExcludedIds(new Set(eligibleConcerns.map((c) => c.id)))
     } else {
-      setIncludedIds(new Set(eligibleConcerns.map((c) => c.id)))
+      // Include all
+      setExcludedIds(new Set())
     }
     setEditedSummaryText(null)
   }
 
   const toggleItem = (id: string) => {
-    const next = new Set(includedIds)
+    const next = new Set(excludedIds)
     if (next.has(id)) {
       next.delete(id)
     } else {
       next.add(id)
     }
-    setIncludedIds(next)
+    setExcludedIds(next)
     setEditedSummaryText(null)
   }
 
@@ -224,21 +250,21 @@ export function GenerateMessengerSummaryDialog({
           className="bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700/60 dark:hover:bg-emerald-900/60 font-medium cursor-pointer shadow-sm transition-all"
         >
           <HugeiconsIcon icon={SparklesIcon} className="w-4 h-4 mr-1.5 text-emerald-600 dark:text-emerald-400" />
-          GC Pending Summary
+          {buttonText}
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl">
+      <DialogContent className="sm:max-w-6xl w-[94vw] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl">
         {/* Header */}
         <DialogHeader className="px-6 py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white border-b border-emerald-800 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
                 <HugeiconsIcon icon={Share01Icon} className="w-5 h-5 text-emerald-200" />
-                Messenger Group Chat Summary Generator
+                {dialogTitle}
               </DialogTitle>
               <DialogDescription className="text-xs text-emerald-100">
-                Generate formatted status announcements ready to copy and forward directly to Messenger group chats.
+                {dialogSubtitle}
               </DialogDescription>
             </div>
             {selectedRowsCount > 0 && (
@@ -265,7 +291,10 @@ export function GenerateMessengerSummaryDialog({
                   <Checkbox
                     id="useSelected"
                     checked={useSelectedOnly}
-                    onCheckedChange={(checked) => setUseSelectedOnly(!!checked)}
+                    onCheckedChange={(checked) => {
+                      setUseSelectedOnly(!!checked)
+                      setEditedSummaryText(null)
+                    }}
                   />
                   <Label htmlFor="useSelected" className="text-xs font-medium cursor-pointer text-emerald-900 dark:text-emerald-200">
                     Use only table checked rows ({selectedRowsCount})
@@ -276,7 +305,7 @@ export function GenerateMessengerSummaryDialog({
               {/* District Filter */}
               <div className="space-y-1">
                 <Label className="text-xs font-medium">District Filter</Label>
-                <Select value={districtFilter} onValueChange={setDistrictFilter}>
+                <Select value={districtFilter} onValueChange={(v) => { setDistrictFilter(v); setEditedSummaryText(null); }}>
                   <SelectTrigger className="h-8 text-xs bg-slate-50 dark:bg-slate-800/50">
                     <SelectValue placeholder="Select District" />
                   </SelectTrigger>
@@ -289,36 +318,39 @@ export function GenerateMessengerSummaryDialog({
                 </Select>
               </div>
 
-              {/* Status Filter */}
-              <div className="grid grid-cols-2 gap-2">
+              {/* Status & Category Filters */}
+              <div className={showCategoryFilter ? "grid grid-cols-2 gap-2" : "space-y-1"}>
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">Status</Label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setEditedSummaryText(null); }}>
                     <SelectTrigger className="h-8 text-xs bg-slate-50 dark:bg-slate-800/50">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">Pending Only</SelectItem>
+                      <SelectItem value="for-validation">For Validation Only</SelectItem>
                       <SelectItem value="under-action">Under Action Only</SelectItem>
-                      <SelectItem value="pending-or-action">Pending & Under Action</SelectItem>
+                      <SelectItem value="pending-or-action">Pending & Under Action/Validation</SelectItem>
                       <SelectItem value="all">All Statuses</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Category</Label>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="h-8 text-xs bg-slate-50 dark:bg-slate-800/50">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="environmental">Environmental</SelectItem>
-                      <SelectItem value="agricultural">Agricultural</SelectItem>
-                      <SelectItem value="all">All Categories</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {showCategoryFilter && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium">Category</Label>
+                    <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setEditedSummaryText(null); }}>
+                      <SelectTrigger className="h-8 text-xs bg-slate-50 dark:bg-slate-800/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        <SelectItem value="environmental">Environmental</SelectItem>
+                        <SelectItem value="agricultural">Agricultural</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -356,11 +388,11 @@ export function GenerateMessengerSummaryDialog({
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-2.5 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Concerns to Include ({includedIds.size} / {eligibleConcerns.length})
+                  Items to Include ({selectedItems.length} / {eligibleConcerns.length})
                 </h3>
                 {eligibleConcerns.length > 0 && (
                   <Button variant="ghost" size="xs" onClick={toggleSelectAll} className="h-6 text-[11px] px-2">
-                    {includedIds.size === eligibleConcerns.length ? 'Deselect All' : 'Select All'}
+                    {excludedIds.size === 0 ? 'Deselect All' : 'Select All'}
                   </Button>
                 )}
               </div>
@@ -368,32 +400,35 @@ export function GenerateMessengerSummaryDialog({
               {eligibleConcerns.length === 0 ? (
                 <div className="p-4 text-center text-xs text-slate-500 border border-dashed rounded-md bg-slate-50 dark:bg-slate-800/30">
                   <HugeiconsIcon icon={AlertCircleIcon} className="w-5 h-5 mx-auto mb-1 text-slate-400" />
-                  No concerns match the current filter options.
+                  No items match the current filter options.
                 </div>
               ) : (
-                <div className="max-h-[160px] overflow-y-auto space-y-1.5 pr-1">
-                  {eligibleConcerns.map((item) => (
-                    <label
-                      key={item.id}
-                      className={`flex items-start gap-2.5 p-2 rounded-md border text-xs cursor-pointer transition-colors ${
-                        includedIds.has(item.id)
-                          ? 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800/60'
-                          : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-800 opacity-60'
-                      }`}
-                    >
-                      <Checkbox
-                        checked={includedIds.has(item.id)}
-                        onCheckedChange={() => toggleItem(item.id)}
-                        className="mt-0.5"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                          📍 {item.location}
-                        </p>
-                        <p className="text-[11px] text-slate-500 truncate">{item.reportTitle}</p>
-                      </div>
-                    </label>
-                  ))}
+                <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1">
+                  {eligibleConcerns.map((item) => {
+                    const isIncluded = !excludedIds.has(item.id)
+                    return (
+                      <label
+                        key={item.id}
+                        className={`flex items-start gap-2.5 p-2 rounded-md border text-xs cursor-pointer transition-colors ${
+                          isIncluded
+                            ? 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800/60'
+                            : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-800 opacity-60'
+                        }`}
+                      >
+                        <Checkbox
+                          checked={isIncluded}
+                          onCheckedChange={() => toggleItem(item.id)}
+                          className="mt-0.5"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                            📍 {item.location}
+                          </p>
+                          <p className="text-[11px] text-slate-500 truncate">{item.reportTitle}</p>
+                        </div>
+                      </label>
+                    )
+                  })}
                 </div>
               )}
             </div>

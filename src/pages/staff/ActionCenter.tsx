@@ -73,6 +73,7 @@ import { UpdateStatusDialog } from '@/components/UpdateStatusDialog'
 import ExportPDFDialog from '@/components/ExportPDFDialog'
 import ImageCarouselDialog from '@/components/ImageCarouselDialog'
 import { GeneratePGOReportDialog } from '@/components/GeneratePGOReportDialog'
+import { GenerateMessengerSummaryDialog } from '@/components/GenerateMessengerSummaryDialog'
 import { PioPhotosExportDialog } from '@/components/PioPhotosExportDialog'
 import { db } from '@/config/firebase'
 import { collection, query, orderBy, onSnapshot, Timestamp, doc, writeBatch, getDocs, where, setDoc } from 'firebase/firestore'
@@ -1478,6 +1479,9 @@ export default function ActionCenter() {
                         {isPioMode ? 'ON' : 'OFF'}
                       </span>
                     </Button>
+
+                    {/* GC Pending Summary Button */}
+                    <GenerateMessengerSummaryDialog concerns={filteredData} selectedRowIds={rowSelection} />
 
                     {/* Generate PGO Report Button */}
                     <GeneratePGOReportDialog concerns={filteredData} />

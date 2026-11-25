@@ -21,6 +21,7 @@ import Export1BACTypeDialog from '@/components/Export1BACTypeDialog'
 import { generateCategorySummaryPDF } from '@/utils/generateCategorySummaryPDF'
 import { generate1BACSummaryPDF } from '@/utils/generate1BACSummaryPDF'
 import { generate1BACOverallSummaryPDF } from '@/utils/generate1BACOverallSummaryPDF'
+import DetailedReportPreviewDialog from '@/components/DetailedReportPreviewDialog'
 import { generatePNPSummaryPDF } from '@/utils/generatePNPSummaryPDF'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import type { DateRange } from 'react-day-picker'
@@ -34,6 +35,7 @@ export default function Report() {
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'under-action' | 'resolved' | 'closed'>('all')
   const [showSummaryDialog, setShowSummaryDialog] = useState(false)
+  const [showDetailedPreview, setShowDetailedPreview] = useState(false)
   const [show1BACTypeDialog, setShow1BACTypeDialog] = useState(false)
   const [show1BACSummaryLoading, setShow1BACSummaryLoading] = useState(false)
   const [showPNPSummaryLoading, setShowPNPSummaryLoading] = useState(false)
@@ -73,6 +75,8 @@ export default function Report() {
             submittedAt: docData.afterPhotos.submittedAt || '',
           } : null),
           actionDate: docData.actionDate || null,
+          actionHistory: docData.actionHistory || [],
+          trackingNo: docData.trackingNo,
           status: docData.status,
           reportedBy: docData.reportedBy || 'N/A',
           createdAt: docData.createdAt instanceof Timestamp
@@ -353,23 +357,30 @@ export default function Report() {
     }
   }
 
-  // Generate Summary PDF Report - REMOVED (will be replaced with separate Agricultural and Environmental reports)
-  const handleExportSummary = async (category: 'agricultural' | 'environmental') => {
+  // Generate Summary PDF Report - supports optional municipality filter
+  const handleExportSummary = async (category: 'agricultural' | 'environmental', municipality: string = 'all') => {
     if (concerns.length === 0) {
       toast.error('No data to export')
       return
     }
 
-    const categoryConcerns = concerns.filter(c => c.category === category)
+    // Apply municipality filter if one is selected
+    const filteredConcerns = municipality !== 'all'
+      ? concerns.filter(c => c.municipality === municipality)
+      : concerns
+
+    const categoryConcerns = filteredConcerns.filter(c => c.category === category)
     if (categoryConcerns.length === 0) {
-      toast.error(`No ${category} concerns found`)
+      const muniLabel = municipality !== 'all' ? ` in ${municipality}` : ''
+      toast.error(`No ${category} concerns found${muniLabel}`)
       return
     }
 
-    toast.info('Generating summary report...')
+    const muniLabel = municipality !== 'all' ? ` for ${municipality}` : ''
+    toast.info(`Generating summary report${muniLabel}...`)
 
     try {
-      const doc = await generateCategorySummaryPDF(concerns, category, reportType as 'action-center' | 'pnp', dateRange)
+      const doc = await generateCategorySummaryPDF(filteredConcerns, category, reportType as 'action-center' | 'pnp', dateRange, municipality !== 'all' ? municipality : undefined)
       
       // Generate filename with date range
       let dateRangeText = ''
@@ -382,8 +393,9 @@ export default function Report() {
       } else {
         dateRangeText = '_all-time'
       }
-      
-      const fileName = `${reportType}_${category}_summary${dateRangeText}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
+
+      const muniSuffix = municipality !== 'all' ? `_${municipality.replace(/\s+/g, '-')}` : ''
+      const fileName = `${reportType}_${category}_summary${muniSuffix}${dateRangeText}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`
       doc.save(fileName)
       toast.success('Summary report generated successfully!')
     } catch (error) {
@@ -853,7 +865,7 @@ export default function Report() {
                 </Button>
                 
                 <Button
-                  onClick={generatePDF}
+                  onClick={() => setShowDetailedPreview(true)}
                   disabled={isLoading || concerns.length === 0}
                   className="flex-1 bg-red-600 hover:bg-red-700"
                 >
@@ -884,6 +896,20 @@ export default function Report() {
           </CardContent>
         </Card>
       </motion.div>
+
+      <DetailedReportPreviewDialog
+        open={showDetailedPreview}
+        onOpenChange={setShowDetailedPreview}
+        concerns={concerns}
+        meta={{
+          title: 'Action Center Report',
+          periodLabel: dateRange === 'custom' && customDateRange?.from
+            ? `${format(customDateRange.from, 'MMM dd, yyyy')} – ${format(customDateRange.to ?? customDateRange.from, 'MMM dd, yyyy')}`
+            : dateRange === 'all' ? 'All time' : dateRange.charAt(0).toUpperCase() + dateRange.slice(1),
+          statusLabel: statusFilter === 'all' ? 'All statuses' : statusFilter,
+        }}
+        fileName={`action-center_detailed_report_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`}
+      />
 
       {/* Preview Section */}
       {(reportType === '1bac' ? oneBACConcerns.length > 0 : concerns.length > 0) && (
